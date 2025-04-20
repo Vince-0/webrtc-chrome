@@ -1,0 +1,16 @@
+#STATUS:COMPLETE:
+WORKFLOW: Read the files in the .augment folder: augment-guidlienes, augment-tasklist. Explain what you understand about the guidelines for the workflow for this project.:CHECKPOINT:1
+
+
+#STATUS:PENDING:
+UX: Create a Chrome extension from the WebRTC SIP client application
+
+#STATUS:NEW:
+UX: Add a settings page to the extension for configuring all the Connection Settings and Media permissions. This page should replace the current Connection Settings section in the main window.
+BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
+UX: Add more extension icons (48px and 128px versions)
+UX: Implement proper error handling and notifications in the extension
+INFRA: Package the extension for distribution
+INFRA: Add automated tests for the extension functionality
+BUG: This extension includes the key file '\\wsl.localhost\Ubuntu-22.04\home\administrator\DEV\chrome-webrtc\certs\key.pem'. You probably don't want to do that.
+

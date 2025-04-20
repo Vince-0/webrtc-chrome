@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Client</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>WebRTC Client</h1>
+        
+        <div class="connection-settings">
+            <h2>Connection Settings</h2>
+            <div class="form-group">
+                <label for="sipServer">SIP Server:</label>
+                <input type="text" id="sipServer" placeholder="example.com" value="example.com">
+            </div>
+            <div class="form-group">
+                <label for="wsServer">WebSocket URL:</label>
+                <input type="text" id="wsServer" placeholder="wss://example.com:7443/ws" value="wss://example.com:7443/ws">
+            </div>
+            <div class="form-group">
+                <label for="sipUsername">Username:</label>
+                <input type="text" id="sipUsername" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label for="sipPassword">Password:</label>
+                <input type="password" id="sipPassword" placeholder="Enter password">
+            </div>
+            <div class="form-group">
+                <label for="sipDisplayName">Display Name:</label>
+                <input type="text" id="sipDisplayName" placeholder="Enter display name">
+            </div>
+            <div class="button-group">
+                <button id="connectBtn">Connect</button>
+                <button id="disconnectBtn" disabled>Disconnect</button>
+            </div>
+        </div>
+
+        <div class="call-controls">
+            <h2>Call Controls</h2>
+            <div class="form-group">
+                <label for="callTo">Destination:</label>
+                <input type="text" id="callTo" placeholder="1002@example.com" required>
+                <small class="form-text">Enter destination address (e.g., 1002@example.com)</small>
+            </div>
+            <div class="button-group">
+                <button id="callBtn" disabled>Call</button>
+                <button id="hangupBtn" disabled>Hang Up</button>
+                <button id="answerBtn" disabled>Answer</button>
+                <button id="rejectBtn" disabled>Reject</button>
+            </div>
+        </div>
+
+        <div class="status-container">
+            <h2>Status</h2>
+            <div id="status" class="status">Disconnected</div>
+            <div id="callStatus" class="call-status"></div>
+        </div>
+
+        <div class="media-container">
+            <h2>Media</h2>
+            <div class="audio-elements">
+                <audio id="remoteAudio" autoplay></audio>
+                <audio id="localAudio" muted autoplay></audio>
+            </div>
+        </div>
+    </div>
+    <script src="/js/sip-0.21.2.min.js"></script>
+    <script src="/js/sip-client.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,17 @@
+WORKFLOW: Use these guidelines to update your remember rules
+
+WORKFLOW: Use the augment/augment-tasklist as a task list to read COMPLETE, PENDING, and NEW tasks with associated categories for example: UX. I will update the task list as needed.
+
+WORKFLOW: Copy all of the Augment chat history output into the augment/augment-chathistory file at the end of every chat interaction in an append only fashion. There is no need to read the entire chat history unless instructed to. 
+
+WORKFLOW:Include all checkpoint numbers so that it can be referred to easily from the augment-tasklist file in the CHECKPOINT: tag at the end of every task description.
+
+WORKFLOW: Number each set of code changes in the chat history exactly like checkpoints numbering so that we can refer to them in the augment/augment-tasklist file, for example: UX:Task description and instructions:CHECKPOINT:1,4,6,10.
+
+WORKFLOW: Append to the augment/augment-chathistory file the Augment platform statistics usage such as: Total user chat messages,Total user agent requests, Total user agent tool uses.
+
+WORKFLOW: Update augment/augment-README file so it explains the project features, directory structure, prerequisites, installation, configuration details, usage, key files and key functions after each code change. Include any information that could be useful for users,developers and LLMs/AI to understand the project enough to be able to start developing it by just reading the README file.
+
+WORKFLOW: Ask any questions about implementing features that could elaborate and clarify the task description.
+
+WORKFLOW: Suggest any changes to the code files and folder structure to better separate code into logical boundaries that help create better maintenance, good coding practices and file separation.
