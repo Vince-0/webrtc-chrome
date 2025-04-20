@@ -3,10 +3,17 @@ WORKFLOW: Read the files in the .augment folder: augment-guidlienes, augment-tas
 INFRA: Create a Chrome extension from the WebRTC SIP client application. Consider manifest.json, permissions, and other necessary configurations.:CHECKPOINT:2,5,7
 
 
-#STATUS:COMPLETE:
-INFRA: The extension's state and actions should be stored in the Chrome storage API. This will allow the extension to remember the user's settings and connection state across browser sessions:CHECKPOINT:10,12,13
+#STATUS:PENDING:
+INFRA: The extension's state and actions should be stored in the Chrome storage API. This will allow the extension to remember the user's settings and connection state across browser sessions:CHECKPOINT:10,12,13,14
+INFRA: Introduce console logging for the simple user functions to help troubleshooting call button functions like hangup, answer, reject.:CHECKPOINT:15
+BUG: On incoming call, the BYE packet isn't resulting in a call status update:CHECKPOINT:16,18
+BUG: Extension not recognizing incoming INVITE messages:CHECKPOINT:17
+BUG: Hangup closes the extension and does not execute the BYE packet until reopening:CHECKPOINT:19
+BUG: Hangup does not seem to be sending the hangup packet and the switch isn't seeing any BYE packets:CHECKPOINT:19
 
 #STATUS:NEW:
+UX: Persist password
+UX: Autofill copy the SIP Server string to the WebsocketURL domain so it is not necessary to type it in.
 UX: Add a settings page to the extension for configuring all the Connection Settings and Media permissions. This page should replace the current Connection Settings section in the main window.
 BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
 UX: Add more extension icons (48px and 128px versions)

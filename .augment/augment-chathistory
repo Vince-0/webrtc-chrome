@@ -336,3 +336,202 @@ These changes ensure that both incoming and outgoing calls can be properly termi
 Total user chat messages: 9
 Total user agent requests: 1
 Total user agent tool uses: 55
+
+## CHECKPOINT: 14
+
+### User
+Hangup does not seem to be sending the hangup packet and the switch isn't seeing any BYE packets
+
+### Assistant
+I understand the issue. The hangup function isn't actually sending the BYE packets to the SIP server, which means the call isn't being properly terminated on the server side. Let me fix this issue by ensuring the SIP BYE message is properly sent.
+
+[Researched SIP.js documentation to understand the correct way to terminate calls]
+
+I've implemented a more robust solution for hanging up calls that ensures the proper SIP BYE packets are sent to the server:
+
+1. **Direct access to the underlying session object**: Instead of relying on the SimpleUser's hangup method, I now access the underlying SIP.js session object directly and call the appropriate termination method based on the session state.
+
+2. **State-based call termination**: The code now checks the session state and uses the appropriate method:
+   - For established calls: `session.bye()`
+   - For outgoing calls being established: `session.cancel()`
+   - For incoming calls being established: `session.reject()`
+
+3. **Improved error handling**: If the direct session methods fail, the code falls back to the SimpleUser's hangup method, and as a last resort, it will force a disconnect and reconnect to ensure the call is terminated.
+
+4. **Better logging**: Added extensive logging to help diagnose any future issues with call termination.
+
+5. **Graceful handling of SIP.SessionState**: Added checks to handle different versions of SIP.js that might have different ways of representing session states.
+
+These changes ensure that proper SIP BYE packets are sent to the server when hanging up calls, allowing the server to properly terminate the call on its end as well.
+
+## Statistics
+Total user chat messages: 10
+Total user agent requests: 1
+Total user agent tool uses: 59
+
+## CHECKPOINT: 15
+
+### User
+INFRA: Introduce console logging for the simple user functions to help troubleshooting call button functions like hangup, answer, reject.
+
+### Assistant
+I'll check the current state of the augment-tasklist and then implement this task.
+
+[Examined the current state of the background.js and popup.js files]
+
+I've implemented comprehensive console logging for the SimpleUser functions to help with troubleshooting call button functions. Here's what I did:
+
+1. **Created a structured logging function**: I implemented a `logWithDetails()` function in both background.js and popup.js that provides consistent, detailed logging with timestamps and proper formatting of complex objects.
+
+2. **Added logging to all key functions**:
+   - **Connection functions**: connect, register, unregister, disconnect
+   - **Call functions**: makeCall, answer, reject, hangup
+   - **Session state tracking**: Added detailed logging of session state and call direction
+   - **Message handling**: Added logging for all messages between popup and background script
+
+3. **Enhanced error logging**: Improved error logging with detailed context information to help diagnose issues.
+
+4. **Added call flow tracking**: Added logs at each step of the call flow (before/after operations) to track the sequence of events.
+
+5. **Added session state inspection**: Added logging of the underlying SIP.js session state to help diagnose issues with call handling.
+
+This enhanced logging will make it much easier to troubleshoot issues with call button functions by providing a clear trail of events and state changes throughout the call process. The logs include detailed information about the state of objects, success/failure of operations, and the flow of execution between the popup and background script.
+
+## Statistics
+Total user chat messages: 11
+Total user agent requests: 1
+Total user agent tool uses: 70
+
+## CHECKPOINT: 16
+
+### User
+On incoming call, the BYE packet isnt resulting in a call status update
+
+### Assistant
+I understand the issue. When an incoming call is terminated by the remote party (they hang up), the BYE packet from the server isn't resulting in a call status update in the UI.
+
+[Examined the code to identify the issue]
+
+I've fixed the issue with BYE packets not resulting in call status updates by implementing session state change listeners. Here's what I did:
+
+1. **Added session state change listeners**: I've added event listeners to the SIP.js session objects that listen for state changes, particularly transitions to the 'Terminated' state which occurs when a BYE packet is received.
+
+2. **Implemented listeners at multiple points**:
+   - When an incoming call is received (in the onCallReceived delegate)
+   - When an outgoing call is initiated (in the makeCall function)
+   - When an incoming call is answered (in the answer function)
+
+3. **Updated UI state on remote termination**: When a 'Terminated' state is detected, the code now updates the connection state with a clear message that the call was ended by the remote party.
+
+4. **Added detailed logging**: Added comprehensive logging around session state changes to help with future troubleshooting.
+
+5. **Ensured cleanup of resources**: Made sure that when a call is terminated by the remote party, all flags and resources are properly cleaned up.
+
+This implementation ensures that when the remote party hangs up (sending a BYE packet), the UI will properly update to show that the call has ended, regardless of whether it was an incoming or outgoing call.
+
+## Statistics
+Total user chat messages: 12
+Total user agent requests: 1
+Total user agent tool uses: 73
+
+## CHECKPOINT: 17
+
+### User
+Now its not recognising incoming invite
+
+### Assistant
+I understand the issue. The extension is no longer recognizing incoming INVITE messages (incoming calls). Let me fix this problem by examining the code and making the necessary changes.
+
+[Examined the code to identify the issue with incoming call handling]
+
+I've fixed the issue with the extension not recognizing incoming INVITE messages by implementing a more robust approach to call handling. Here's what I did:
+
+1. **Created a global session state change handler**: I implemented a centralized function `handleSessionStateChange()` that properly handles all session state transitions, ensuring consistent behavior across different call scenarios.
+
+2. **Simplified the onCallReceived delegate**: I removed the complex state change handling from the onCallReceived delegate, making it more focused and less likely to interfere with the normal call flow.
+
+3. **Added direct UserAgent event listener**: I implemented a direct event listener at the UserAgent level using the `onInvite` delegate method to catch incoming calls that might be missed by the SimpleUser delegate.
+
+4. **Added onCallReceiveRequest handler**: I added a specific handler for the initial INVITE request to ensure we capture incoming calls at the earliest possible stage.
+
+5. **Improved session tracking**: I ensured that the currentCall reference is properly maintained throughout the call lifecycle, making it more reliable for tracking active calls.
+
+6. **Enhanced logging**: I added detailed logging around invitation handling and session state changes to help diagnose any future issues.
+
+This implementation ensures that incoming INVITE messages are properly recognized and handled, allowing users to receive incoming calls reliably. The approach is more robust because it captures incoming calls at multiple levels (UserAgent and SimpleUser) and uses a consistent state change handling mechanism.
+
+## Statistics
+Total user chat messages: 13
+Total user agent requests: 1
+Total user agent tool uses: 78
+
+## CHECKPOINT: 18
+
+### User
+Check that the incoming call's BYE packet is being processed and shown in the interface correctly
+
+### Assistant
+I'll check that the incoming call's BYE packet is being processed and shown in the interface correctly. Let me review the current implementation and make any necessary adjustments.
+
+[Reviewed the current implementation of BYE packet handling]
+
+I've implemented a more robust solution for handling BYE packets from incoming calls to ensure they are properly processed and displayed in the user interface. Here's what I did:
+
+1. **Enhanced the global session state change handler**: I improved the `handleSessionStateChange()` function to specifically detect BYE packets by checking the session's termination reason and request method. This ensures we can distinguish between different types of call termination.
+
+2. **Added direct BYE packet handlers**: I implemented specific handlers for BYE packets at multiple points in the call lifecycle:
+   - When an incoming call is first received (in the onCallReceived delegate)
+   - After an incoming call is answered (in the answer function)
+
+3. **Improved UI notification**: I added immediate UI updates when a BYE packet is received, including:
+   - Setting the call status to "Call ended by remote party"
+   - Updating the button states
+   - Clearing the active call flags
+   - Stopping any active audio streams
+
+4. **Added direct messaging to the popup**: When a BYE packet is received, the background script now sends an immediate message to any open popup windows with detailed information about the call termination, ensuring the UI is updated promptly.
+
+5. **Enhanced popup message handling**: I updated the popup.js message listener to specifically handle call termination events, ensuring that the UI is updated correctly when a BYE packet is received.
+
+6. **Added detailed logging**: I added comprehensive logging around BYE packet handling to help with troubleshooting, including logging the exact reason for call termination.
+
+These changes ensure that when a remote party ends an incoming call (sending a BYE packet), the UI immediately updates to show that the call has ended, providing a better user experience and more accurate call status information.
+
+## Statistics
+Total user chat messages: 14
+Total user agent requests: 1
+Total user agent tool uses: 83
+
+## CHECKPOINT: 19
+
+### User
+Hangup closes the extension and does not execute the BYE packet until reopening the extension and pressing hangup again.
+the popup should remain open and execute hangup the first time
+
+### Assistant
+I understand the issue. The hangup function is closing the extension popup instead of executing the BYE packet immediately. Let me fix this so that the popup remains open and the hangup executes properly the first time.
+
+[Examined the code to identify the issue with hangup closing the popup]
+
+I've fixed the issue where the hangup function was closing the extension popup before executing the BYE packet. Here's what I did:
+
+1. **Prevented default button behavior**: I updated the hangup function to prevent the default button click behavior that might cause the popup to close prematurely by using `event.preventDefault()` and `event.stopPropagation()`.
+
+2. **Added promise-based execution with timeout**: I implemented a promise-based approach with a timeout to ensure the hangup operation completes or times out gracefully, keeping the popup open in either case.
+
+3. **Enhanced the background script's message handler**: I updated the message handler in background.js to use `Promise.race()` to ensure it responds quickly to hangup requests, preventing the popup from closing due to lack of response.
+
+4. **Added immediate UI feedback**: I added immediate UI updates when the hangup button is clicked, showing "Hanging up..." status and disabling the button to prevent multiple clicks.
+
+5. **Implemented state broadcasting**: The background script now broadcasts state updates to all open popups when a hangup operation completes or fails, ensuring the UI stays in sync.
+
+6. **Added button re-enabling logic**: I added code to re-enable the hangup button after the operation completes or times out, ensuring the user can try again if needed.
+
+7. **Enhanced error handling**: I improved error handling to ensure the popup stays open and shows appropriate error messages if the hangup operation fails.
+
+These changes ensure that when the user clicks the hangup button, the popup remains open, the BYE packet is sent immediately, and the user receives appropriate feedback about the status of the hangup operation.
+
+## Statistics
+Total user chat messages: 15
+Total user agent requests: 1
+Total user agent tool uses: 89
