@@ -18,30 +18,9 @@ chrome.runtime.onInstalled.addListener(() => {
 // Handle messages from the popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'checkMicrophonePermission') {
-    // Check if we have microphone permission
-    chrome.permissions.contains({ permissions: ['microphone'] })
-      .then((result) => {
-        if (result) {
-          sendResponse({ status: 'granted' });
-        } else {
-          sendResponse({ status: 'denied' });
-        }
-      })
-      .catch((error) => {
-        console.error('Error checking microphone permission:', error);
-        sendResponse({ status: 'error', error: error.message });
-      });
-    return true; // Required for async sendResponse
-  } else if (message.action === 'requestMicrophonePermission') {
-    // Request microphone permission
-    chrome.permissions.request({ permissions: ['microphone'] })
-      .then((granted) => {
-        sendResponse({ granted });
-      })
-      .catch((error) => {
-        console.error('Error requesting microphone permission:', error);
-        sendResponse({ granted: false, error: error.message });
-      });
-    return true; // Required for async sendResponse
+    // We can't directly check microphone permission from the background script
+    // So we'll just inform the popup to check it directly
+    sendResponse({ status: 'unknown' });
+    return true;
   }
 });

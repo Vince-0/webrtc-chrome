@@ -135,30 +135,17 @@ function saveSettings() {
 
 // Check microphone permission
 function checkMicrophonePermission() {
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage(
-            { action: 'checkMicrophonePermission' },
-            (response) => {
-                if (response && response.status === 'granted') {
-                    console.log('Microphone permission already granted');
-                } else {
-                    console.log('Microphone permission status:', response ? response.status : 'unknown');
-                    // We'll request permission when making a call
-                }
-            }
-        );
-    } else {
-        // Fallback for non-extension environment
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => {
-                console.log('Microphone permission granted');
-                stream.getTracks().forEach(track => track.stop());
-            })
-            .catch(error => {
-                console.error('Microphone permission denied:', error);
-                updateStatus('Warning: Microphone access is required for calls');
-            });
-    }
+    // We'll use the standard Web API to check for microphone permission
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            console.log('Microphone permission granted');
+            // Stop the tracks immediately, we just needed the permission
+            stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(error => {
+            console.error('Microphone permission denied:', error);
+            updateStatus('Warning: Microphone access is required for calls');
+        });
 }
 
 // Connect to SIP server
@@ -335,29 +322,15 @@ async function disconnect() {
 // Request microphone permission if needed
 async function requestMicrophonePermission() {
     return new Promise((resolve, reject) => {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-            chrome.runtime.sendMessage(
-                { action: 'requestMicrophonePermission' },
-                (response) => {
-                    if (response && response.granted) {
-                        resolve(true);
-                    } else {
-                        reject(new Error('Microphone permission denied'));
-                    }
-                }
-            );
-        } else {
-            // Fallback for non-extension environment
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    // Stop the tracks immediately, we just needed the permission
-                    stream.getTracks().forEach(track => track.stop());
-                    resolve(true);
-                })
-                .catch(error => {
-                    reject(error);
-                });
-        }
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                // Stop the tracks immediately, we just needed the permission
+                stream.getTracks().forEach(track => track.stop());
+                resolve(true);
+            })
+            .catch(error => {
+                reject(error);
+            });
     });
 }
 
