@@ -1,16 +1,16 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 2,
   "name": "WebRTC SIP Client",
   "version": "1.0.0",
   "description": "A WebRTC-based SIP client for making and receiving voice calls directly from Chrome",
+
   "permissions": [
     "storage",
-    "notifications"
-  ],
-  "host_permissions": [
+    "notifications",
+    "background",
     "*://*/*"
   ],
-  "action": {
+  "browser_action": {
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png"
@@ -21,6 +21,7 @@
   },
 
   "background": {
-    "service_worker": "js/background.js"
+    "page": "background.html",
+    "persistent": true
   }
 }

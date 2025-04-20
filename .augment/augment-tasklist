@@ -4,7 +4,7 @@ INFRA: Create a Chrome extension from the WebRTC SIP client application. Conside
 
 
 #STATUS:COMPLETE:
-
+INFRA: The extension's state and actions should be stored in the Chrome storage API. This will allow the extension to remember the user's settings and connection state across browser sessions:CHECKPOINT:10
 
 #STATUS:NEW:
 UX: Add a settings page to the extension for configuring all the Connection Settings and Media permissions. This page should replace the current Connection Settings section in the main window.
