@@ -173,3 +173,28 @@ I've fixed the issue with the 'microphone' permission in the manifest.json file.
 Total user chat messages: 5
 Total user agent requests: 1
 Total user agent tool uses: 28
+
+## CHECKPOINT: 7
+
+### User
+sip-client.js:453 Hangup error: TypeError: currentCall.terminate is not a function
+    at HTMLButtonElement.hangup (sip-client.js:445:31)
+
+### Assistant
+I see the error you're encountering in the sip-client.js file. This is a bug in the hangup function where it's trying to call `currentCall.terminate()` but `currentCall` doesn't have a `terminate` method.
+
+[Examined the code to understand the issue]
+
+I see the issue. In the `onCallReceived` event handler, `currentCall` is being set to `true` instead of the actual call object. This is causing the error when trying to call `currentCall.terminate()` in the hangup function.
+
+I've fixed the issue by:
+
+1. Updating the `onCallReceived` event handler to store the actual call session object in `currentCall` instead of just setting it to `true`
+2. Simplifying the `hangup` function to always use `simpleUser.hangup()` which properly handles both incoming and outgoing calls
+
+This change ensures that the hangup functionality works correctly for both incoming and outgoing calls without trying to call methods that don't exist.
+
+## Statistics
+Total user chat messages: 6
+Total user agent requests: 1
+Total user agent tool uses: 31

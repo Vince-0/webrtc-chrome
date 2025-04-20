@@ -209,9 +209,9 @@ async function connect() {
 
         // Add event listeners
         simpleUser.delegate = {
-            onCallReceived: () => {
-                console.log('Incoming call received');
-                currentCall = true; // Just mark that we have an incoming call
+            onCallReceived: (session) => {
+                console.log('Incoming call received', session);
+                currentCall = session; // Store the actual call session
                 updateCallStatus('Incoming call...');
                 elements.answerBtn.disabled = false;
                 elements.rejectBtn.disabled = false;
@@ -441,11 +441,8 @@ async function reject() {
 // Hang up active call
 async function hangup() {
     try {
-        if (currentCall) {
-            await currentCall.terminate();
-        } else {
-            await simpleUser.hangup();
-        }
+        // Always use simpleUser.hangup() which handles both incoming and outgoing calls
+        await simpleUser.hangup();
         updateCallStatus('Call ended');
         resetCallState();
         currentCall = null;
