@@ -10,18 +10,18 @@ const elements = {
     sipDisplayName: document.getElementById('sipDisplayName'),
     connectBtn: document.getElementById('connectBtn'),
     disconnectBtn: document.getElementById('disconnectBtn'),
-    
+
     // Call controls
     callTo: document.getElementById('callTo'),
     callBtn: document.getElementById('callBtn'),
     hangupBtn: document.getElementById('hangupBtn'),
     answerBtn: document.getElementById('answerBtn'),
     rejectBtn: document.getElementById('rejectBtn'),
-    
+
     // Status elements
     status: document.getElementById('status'),
     callStatus: document.getElementById('callStatus'),
-    
+
     // Media elements
     remoteAudio: document.getElementById('remoteAudio'),
     localAudio: document.getElementById('localAudio')
@@ -36,20 +36,30 @@ function init() {
     elements.hangupBtn.addEventListener('click', hangup);
     elements.answerBtn.addEventListener('click', answer);
     elements.rejectBtn.addEventListener('click', reject);
-    
+
     // Set default WebSocket URL if SIP server is changed
     elements.sipServer.addEventListener('change', updateDefaultWebSocketUrl);
     elements.sipServer.addEventListener('input', updateDefaultWebSocketUrl);
-    
+
     // Load saved settings from Chrome storage
     loadSavedSettings();
-    
+
     // Check microphone permissions
     checkMicrophonePermission();
-    
+
+    // Check for incoming calls immediately
+    chrome.storage.local.get(['hasIncomingCall'], (result) => {
+        if (result.hasIncomingCall) {
+            console.log('Found incoming call flag on popup init');
+            elements.answerBtn.disabled = false;
+            elements.rejectBtn.disabled = false;
+            updateCallStatus('Incoming call...');
+        }
+    });
+
     // Get current state from background script
     getStateFromBackground();
-    
+
     // Listen for state updates from background script
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'stateUpdated') {
@@ -81,7 +91,7 @@ function updateButtonState(connected, hasActiveCall = false) {
     elements.connectBtn.disabled = connected;
     elements.disconnectBtn.disabled = !connected;
     elements.callBtn.disabled = !connected || hasActiveCall;
-    
+
     if (hasActiveCall) {
         elements.hangupBtn.disabled = false;
         elements.answerBtn.disabled = true;
@@ -131,19 +141,31 @@ function getStateFromBackground() {
 // Update UI based on state from background script
 function updateUIFromState(state) {
     console.log('Updating UI from state:', state);
-    
+
     // Update status
     updateStatus(state.status || 'Disconnected');
     updateCallStatus(state.callStatus || '');
-    
+
     // Update button states
     updateButtonState(state.isConnected, state.hasActiveCall);
-    
+
     // Handle incoming calls
     if (state.hasActiveCall && state.callStatus === 'Incoming call...') {
         elements.answerBtn.disabled = false;
         elements.rejectBtn.disabled = false;
     }
+
+    // Also check storage for incoming call flag
+    chrome.storage.local.get(['hasIncomingCall'], (result) => {
+        if (result.hasIncomingCall) {
+            console.log('Found incoming call flag in storage');
+            elements.answerBtn.disabled = false;
+            elements.rejectBtn.disabled = false;
+            if (!state.callStatus || state.callStatus !== 'Incoming call...') {
+                updateCallStatus('Incoming call...');
+            }
+        }
+    });
 }
 
 // Connect to SIP server
@@ -306,7 +328,7 @@ async function hangup() {
                 updateUIFromState(response.state);
             }
         });
-        
+
         // Stop local audio stream
         if (elements.localAudio.srcObject) {
             elements.localAudio.srcObject.getTracks().forEach(track => track.stop());

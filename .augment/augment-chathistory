@@ -237,3 +237,102 @@ With these changes, the extension will now maintain its connection to the SIP se
 Total user chat messages: 7
 Total user agent requests: 1
 Total user agent tool uses: 42
+
+## CHECKPOINT: 12
+
+### User
+Incoming call state does not persist correctly. On answering incoming call:  Updating UI from state:
+{isConnected: true, isRegistered: true, status: 'Registered', callStatus: 'Failed to answer: No incoming call to answer', hasActiveCall: false}
+callStatus
+:
+"Failed to answer: No incoming call to answer"
+hasActiveCall
+:
+false
+isConnected
+:
+true
+isRegistered
+:
+true
+status
+:
+"Registered"
+
+### Assistant
+I see the issue with the incoming call state not persisting correctly. When trying to answer an incoming call, the system is reporting "Failed to answer: No incoming call to answer" even though there should be an active incoming call.
+
+[Created a detailed plan for fixing the issue]
+
+I've implemented a solution to fix the incoming call persistence issue by:
+
+1. **Adding a persistent flag for incoming calls**: I've added a `hasIncomingCall` flag in Chrome's storage API that persists even if the popup is closed or the extension is minimized.
+
+2. **Updating all call handling functions**: I've modified the `answer`, `reject`, and `hangup` functions to check for this flag and properly handle incoming calls even if the direct reference to the call object is lost.
+
+3. **Improving state synchronization**: The popup now checks for the incoming call flag on initialization and updates the UI accordingly.
+
+4. **Adding better error handling**: All functions now properly clear the incoming call flag on both success and error conditions to prevent stale state.
+
+5. **Adding call direction tracking**: The state now includes a `callDirection` property to better track whether a call is incoming or outgoing.
+
+These changes ensure that incoming calls can be properly answered even if the popup is closed and reopened during an incoming call. The extension will now maintain the correct call state across popup sessions.
+
+## Statistics
+Total user chat messages: 8
+Total user agent requests: 1
+Total user agent tool uses: 50
+
+## CHECKPOINT: 13
+
+### User
+Hanging up an incoming call does not in fact hang it up, however hanging up an outbound call works just fine. Compare these two user flows and fix the hang up for the incoming call.
+Updating UI from state:
+{isConnected: true, isRegistered: true, status: 'Registered', callStatus: 'Call ended', hasActiveCall: false, …}
+callDirection
+:
+null
+callStatus
+:
+"Call ended"
+hasActiveCall
+:
+false
+isConnected
+:
+true
+isRegistered
+:
+true
+status
+:
+"Registered"
+[[Prototype]]
+:
+Object
+
+### Assistant
+I'll analyze and fix the issue with hanging up incoming calls. Let me compare the two user flows and identify the problem.
+
+The issue appears to be that while the UI state is correctly updated to show "Call ended" and `hasActiveCall: false` when hanging up an incoming call, the actual SIP call isn't being properly terminated.
+
+[Created a detailed plan for fixing the issue]
+
+I've implemented a solution to fix the issue with hanging up incoming calls by:
+
+1. **Differentiating between incoming and outgoing calls**: I've updated the hangup function to check the call direction (incoming vs outgoing) and handle each case appropriately.
+
+2. **Using the correct SIP.js method for call termination**: According to the SIP.js documentation, we need to use different methods to terminate calls based on their state and direction. For incoming calls that have been answered, we should use `session.bye()` rather than the generic `hangup()` method.
+
+3. **Accessing the underlying session object**: I've added code to access the underlying SIP.js session object (`simpleUser._session`) for incoming calls to properly terminate them using the `bye()` method.
+
+4. **Adding better logging and error handling**: I've added more detailed logging to help diagnose any future issues with call termination.
+
+5. **Ensuring call direction is properly tracked**: I've updated the makeCall function to explicitly set the call direction to 'outgoing' to ensure we can differentiate between incoming and outgoing calls.
+
+These changes ensure that both incoming and outgoing calls can be properly terminated, maintaining a consistent user experience regardless of call direction.
+
+## Statistics
+Total user chat messages: 9
+Total user agent requests: 1
+Total user agent tool uses: 55

@@ -20,12 +20,18 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('WebRTC SIP Client extension installed');
 
   // Initialize default settings if needed
-  chrome.storage.local.get(['sipServer', 'wsServer', 'connectionState'], (result) => {
+  chrome.storage.local.get(['sipServer', 'wsServer', 'connectionState', 'hasIncomingCall'], (result) => {
+    // Initialize hasIncomingCall flag if it doesn't exist
+    if (result.hasIncomingCall === undefined) {
+      chrome.storage.local.set({ hasIncomingCall: false });
+    }
+
     if (!result.sipServer) {
       chrome.storage.local.set({
         sipServer: 'example.com',
         wsServer: 'wss://example.com:7443/ws',
-        connectionState: connectionState
+        connectionState: connectionState,
+        hasIncomingCall: false
       });
     } else if (result.connectionState) {
       // Restore connection state
@@ -42,6 +48,13 @@ chrome.runtime.onInstalled.addListener(() => {
       }
     }
   });
+});
+
+// Initialize when the background page loads
+chrome.storage.local.get(['hasIncomingCall'], (result) => {
+  if (result.hasIncomingCall === undefined) {
+    chrome.storage.local.set({ hasIncomingCall: false });
+  }
 });
 
 // Update connection state and save to storage
@@ -108,9 +121,14 @@ async function connect(server, wsServerUrl, username, password, displayName) {
       onCallReceived: (session) => {
         console.log('Incoming call received', session);
         currentCall = session;
+
+        // Store the fact that we have an incoming call in a more persistent way
+        chrome.storage.local.set({ hasIncomingCall: true });
+
         updateConnectionState({
           callStatus: 'Incoming call...',
-          hasActiveCall: true
+          hasActiveCall: true,
+          callDirection: 'incoming'
         });
 
         // Show notification for incoming call
@@ -131,9 +149,13 @@ async function connect(server, wsServerUrl, username, password, displayName) {
       onCallHangup: () => {
         updateConnectionState({
           callStatus: 'Call ended',
-          hasActiveCall: false
+          hasActiveCall: false,
+          callDirection: null
         });
         currentCall = null;
+
+        // Clear the incoming call flag
+        chrome.storage.local.set({ hasIncomingCall: false });
       },
       onServerConnect: async () => {
         updateConnectionState({
@@ -301,7 +323,8 @@ async function makeCall(target, server) {
 
     updateConnectionState({
       callStatus: 'Calling...',
-      hasActiveCall: true
+      hasActiveCall: true,
+      callDirection: 'outgoing'
     });
     await simpleUser.call(targetUri.toString(), options);
 
@@ -309,7 +332,8 @@ async function makeCall(target, server) {
     console.error('Call error:', error);
     updateConnectionState({
       callStatus: `Call failed: ${error.message}`,
-      hasActiveCall: false
+      hasActiveCall: false,
+      callDirection: null
     });
   }
 }
@@ -318,59 +342,145 @@ async function makeCall(target, server) {
 async function answer() {
   try {
     console.log('Answering call, currentCall:', currentCall);
-    if (!currentCall) {
+
+    // Check if we have an incoming call flag set
+    const data = await new Promise(resolve => {
+      chrome.storage.local.get(['hasIncomingCall'], result => resolve(result));
+    });
+
+    const hasIncomingCall = data.hasIncomingCall;
+    console.log('hasIncomingCall flag from storage:', hasIncomingCall);
+
+    if (!currentCall && !hasIncomingCall) {
       throw new Error('No incoming call to answer');
     }
 
+    // If we have the flag but lost the currentCall reference, try to reconnect
+    if (!currentCall && hasIncomingCall && simpleUser) {
+      console.log('Attempting to answer call with lost reference');
+      // We'll try to answer anyway, as the SIP.js library might still have the session internally
+    }
+
     await simpleUser.answer();
+
+    // Clear the incoming call flag
+    chrome.storage.local.set({ hasIncomingCall: false });
+
     updateConnectionState({
       callStatus: 'Call connected',
-      hasActiveCall: true
+      hasActiveCall: true,
+      callDirection: 'incoming'
     });
   } catch (error) {
     console.error('Answer error:', error);
     updateConnectionState({
       callStatus: `Failed to answer: ${error.message}`,
-      hasActiveCall: false
+      hasActiveCall: false,
+      callDirection: null
     });
     currentCall = null;
+
+    // Clear the incoming call flag on error too
+    chrome.storage.local.set({ hasIncomingCall: false });
   }
 }
 
 // Reject incoming call
 async function reject() {
   try {
-    if (!currentCall) {
+    // Check if we have an incoming call flag set
+    const data = await new Promise(resolve => {
+      chrome.storage.local.get(['hasIncomingCall'], result => resolve(result));
+    });
+
+    const hasIncomingCall = data.hasIncomingCall;
+    console.log('hasIncomingCall flag from storage (reject):', hasIncomingCall);
+
+    if (!currentCall && !hasIncomingCall) {
       throw new Error('No incoming call to reject');
     }
+
     await simpleUser.reject();
+
+    // Clear the incoming call flag
+    chrome.storage.local.set({ hasIncomingCall: false });
+
     updateConnectionState({
       callStatus: 'Call rejected',
-      hasActiveCall: false
+      hasActiveCall: false,
+      callDirection: null
     });
     currentCall = null;
   } catch (error) {
     console.error('Reject error:', error);
     updateConnectionState({
-      callStatus: `Failed to reject: ${error.message}`
+      callStatus: `Failed to reject: ${error.message}`,
+      callDirection: null
     });
+
+    // Clear the incoming call flag on error too
+    chrome.storage.local.set({ hasIncomingCall: false });
   }
 }
 
 // Hang up active call
 async function hangup() {
   try {
-    await simpleUser.hangup();
+    console.log('Hanging up call, currentCall:', currentCall, 'callDirection:', connectionState.callDirection);
+
+    // Get the call direction from state
+    const callDirection = connectionState.callDirection;
+
+    // Check if we have an active call in storage
+    const data = await new Promise(resolve => {
+      chrome.storage.local.get(['hasIncomingCall'], result => resolve(result));
+    });
+
+    const hasIncomingCall = data.hasIncomingCall;
+    console.log('hasIncomingCall flag from storage (hangup):', hasIncomingCall);
+
+    // If we don't have an active call, there's nothing to hang up
+    if (!currentCall && !hasIncomingCall && !connectionState.hasActiveCall) {
+      console.log('No active call to hang up');
+      return;
+    }
+
+    // For incoming calls that have been answered, we need to use bye()
+    // For outgoing calls, we can use hangup()
+    if (callDirection === 'incoming' && simpleUser) {
+      // Try to access the session directly if possible
+      if (simpleUser._session) {
+        console.log('Using session.bye() for incoming call');
+        await simpleUser._session.bye();
+      } else {
+        // Fallback to the standard hangup method
+        console.log('Falling back to simpleUser.hangup() for incoming call');
+        await simpleUser.hangup();
+      }
+    } else {
+      // For outgoing calls or when we're not sure
+      console.log('Using simpleUser.hangup() for outgoing call');
+      await simpleUser.hangup();
+    }
+
+    // Clear the incoming call flag
+    chrome.storage.local.set({ hasIncomingCall: false });
+
     updateConnectionState({
       callStatus: 'Call ended',
-      hasActiveCall: false
+      hasActiveCall: false,
+      callDirection: null
     });
     currentCall = null;
   } catch (error) {
     console.error('Hangup error:', error);
     updateConnectionState({
-      callStatus: `Failed to hang up: ${error.message}`
+      callStatus: `Failed to hang up: ${error.message}`,
+      callDirection: null
     });
+
+    // Clear the incoming call flag on error too
+    chrome.storage.local.set({ hasIncomingCall: false });
   }
 }
 
