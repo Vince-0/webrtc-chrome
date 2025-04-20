@@ -9,13 +9,19 @@ This project is a Chrome extension that provides a WebRTC-based SIP client for m
 - Receiving inbound calls
 - Basic call controls (answer, reject, hang up)
 - Connection status display
+- Chrome extension integration with storage and permissions APIs
+- Automatic microphone permission handling
 
 ## Directory Structure
 - `/` - Root directory containing the main application files
+  - `manifest.json` - Chrome extension manifest file
   - `popup.html` - The main extension popup interface
-  - `sip-client.js` - Core SIP client implementation
-  - `sip-0.21.2.min.js` - SIP.js library (minified)
-  - `style.css` - Styling for the extension
+  - `/js` - JavaScript files
+    - `sip-client.js` - Core SIP client implementation
+    - `sip-0.21.2.min.js` - SIP.js library (minified)
+    - `background.js` - Chrome extension background service worker
+  - `/css` - Stylesheets
+    - `style.css` - Styling for the extension
   - `/icons` - Directory containing extension icons
     - `icon16.png` - 16x16 icon for the extension
 

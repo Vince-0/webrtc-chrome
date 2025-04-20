@@ -2,8 +2,8 @@
 WORKFLOW: Read the files in the .augment folder: augment-guidlienes, augment-tasklist. Explain what you understand about the guidelines for the workflow for this project.:CHECKPOINT:1
 
 
-#STATUS:PENDING:
-UX: Create a Chrome extension from the WebRTC SIP client application
+#STATUS:COMPLETE:
+INFRA: Create a Chrome extension from the WebRTC SIP client application. Consider manifest.json, permissions, and other necessary configurations.:CHECKPOINT:2
 
 #STATUS:NEW:
 UX: Add a settings page to the extension for configuring all the Connection Settings and Media permissions. This page should replace the current Connection Settings section in the main window.
