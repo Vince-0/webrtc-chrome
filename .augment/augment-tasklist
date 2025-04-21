@@ -11,18 +11,58 @@ UX: Change WebRTC Client heading to be a smaller heading "Phone":CHECKPOINT:20
 UX: Reconfigure the layout so that the connection settings are in a separate section from the call controls.:CHECKPOINT:20
 UX: Remove the Call Control and Media Headings:CHECKPOINT:21
 UX: Make the Connection Settings, Status heading fonts smaller and centered:CHECKPOINT:21
+UX: Put the Status section at the top, above the Connection Settings.:CHECKPOINT:28
+UX: Connection Settings should be renamed to Settings.:CHECKPOINT:28
+UX: Put the call status under the call control buttons, make it centered. Leave the registration status at the top.:CHECKPOINT:31
+UX: Make the registration status right justified.:CHECKPOINT:31
+UX: Display the Username once connected, on the same line as the registration status but left justified.:CHECKPOINT:31
+UX: Put the Settings secion at the very bottom, remove the divider.:CHECKPOINT:31
+UX: Center the username display and registration status.:CHECKPOINT:32
+UX: Center all the input box labels text as well as input box suggestions.:CHECKPOINT:32
+UX: Remove the "Enter destination address (e.g., 1002@example.com)" text:CHECKPOINT:32
+UX: Remove the colon : after each input box label:CHECKPOINT:32
+UX: Center the Settings Connect and Disconnect buttons.:CHECKPOINT:34
+UX: Move the Status section to the very bottom, under the settings.:CHECKPOINT:34
+UX: Center the registration status and username so that the username display and registration status are next to each other in the center.:CHECKPOINT:34
+UX: Remove the destination suggestion 1002@example.com.:CHECKPOINT:34
+UX: Reduce the length of the window by 25%.:CHECKPOINT:36
+UX: Remove the dividers.:CHECKPOINT:36
+UX: Reduce the section margins by 10px.:CHECKPOINT:37
+UX: Reduce the windows length by 25%.:CHECKPOINT:37
+UX: Autofill copy the SIP Server string to the WebsocketURL domain so it is not necessary to type it in.:CHECKPOINT:40
+UX: Implement browser notifications for incoming calls with an audio alert and visual indication:CHECKPOINT:40,43
+UX: In settings, display name should be directly under username.:CHECKPOINT:45
+UX: Autofill copy the display name from the username.:CHECKPOINT:45
+UX: Reduce the size of the Settings element so that the button is close around the size of the settings text.:CHECKPOINT:45
+UX: Remove the Reject button, Failed to reject: simpleUser.reject is not a function.:CHECKPOINT:45
+UX: Display name does not correctly autofill from username:CHECKPOINT:46
+UX: Remove the Destination label:CHECKPOINT:46
+UX: Rename the extension from WebRTC SIP Client to Phone.:CHECKPOINT:46
+UX: Incoming call status should display the number calling on a second line in the call status.:CHECKPOINT:58
+INFRA: The manifest description should be "A simple phone app for making and receiving voice calls directly from Chrome. Uses SIP.js":CHECKPOINT:59
+UX: Make the extension a standalone window that isnt attached to the browser extension button.:CHECKPOINT:59
 
 
 #STATUS:PENDING:
-UX: Put the Status section at the top, above the Connection Settings
+
 
 #STATUS:NEW:
-UX: Persist password
-UX: Autofill copy the SIP Server string to the WebsocketURL domain so it is not necessary to type it in.
-BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
-UX: Add more extension icons (48px and 128px versions)
-UX: Implement browser notifications for incoming calls with an audio alert and pop up.
+UX: Add an audio playback while the call is ringing / tying. I will provide an audio file dailing.mp3
+UX: Call log feature should be added to keep a history of calls made and received. It should be displayed in a collapsible section above the settings section. It should show 5 history entries and be scrollable.
+
+INFRA: Console logging should be an optional toggle setting in the Settings menu. Disabling it should remove all logging from the console.
+INFRA: Make state stored data properly secured because it includes user name and password.
+INFRA: Make the web socket communication secure so that it is not vulnerable to MITM attacks because it includes user name and password.
 INFRA: Package the extension for distribution
 INFRA: Add automated tests for the extension functionality
-BUG: This extension includes the key file '\\wsl.localhost\Ubuntu-22.04\home\administrator\DEV\chrome-webrtc\certs\key.pem'. You probably don't want to do that.
+INFRA: Manifest version 2 is deprecated, and support will be removed in 2024. See https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline for details.:CHECKPOINT:47,48,49,50,51,53,54
+UX: Persist password:CHECKPOINT:47
+INFRA: Unchecked runtime.lastError: Unable to download all specified images. background.html:0 (anonymous function):CHECKPOINT:47
+INFRA: Permission '*://*/*' is unknown.:CHECKPOINT:48
+INFRA: Connection error: ReferenceError: SIP is not defined:CHECKPOINT:49
+INFRA: Connection error: ReferenceError: window is not defined:CHECKPOINT:50
+INFRA: Call failed: MediaStream is not defined:CHECKPOINT:51
+INFRA: SessionDescriptionHandler.getDescription failed - Error: Media devices not available in insecure contexts:CHECKPOINT:53
+INFRA: TypeError: this._peerConnection.getReceivers is not a function:CHECKPOINT:54
+BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
 

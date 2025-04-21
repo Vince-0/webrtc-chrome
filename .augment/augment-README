@@ -104,12 +104,29 @@ The extension requires the following configuration:
 
 ## Recent Improvements
 - Minimalist UI design with smaller headings and reduced visual clutter
-- Collapsible connection settings section that auto-hides when connected
+- Ultra-compact window size (reduced by over 40% from original)
+- Tighter spacing with reduced margins throughout the interface
+- Removed dividers for a cleaner, more modern look
+- Centered text alignment throughout the interface for visual harmony
+- Centered buttons and form elements for balanced appearance
+- Removed colons from form labels for cleaner appearance
+- Removed unnecessary help text and placeholder suggestions to reduce visual noise
+- Status section moved to the bottom for a more logical information flow
+- Username and connection status displayed side-by-side in the center
+- Call status displayed under call controls for contextual relevance
+- Settings section at the bottom for better focus on call controls
+- Renamed "Connection Settings" to "Settings" for a more generic approach
+- Collapsible settings section that auto-hides when connected
+- Compact Settings button that fits tightly around the text
+- Logical form field ordering with display name under username
+- Automatic display name generation from username
+- Automatic WebSocket URL generation from SIP server domain
+- Browser notifications for incoming calls with audio alerts
+- Removed non-functional Reject button for better reliability
 - Enhanced error handling and detailed logging for troubleshooting
 - Improved handling of BYE packets for call termination
 - Fixed issues with incoming call detection and handling
 - Persistent popup during call operations
-- Visual connection status indicators
 
 ## Known Issues
 - Microphone access may be denied, requiring proper permissions setup

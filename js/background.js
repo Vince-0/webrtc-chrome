@@ -70,6 +70,53 @@ function handleSessionStateChange(session, newState) {
   }
 }
 
+// Variables to track the standalone window
+let phoneWindow = null;
+let phoneWindowId = null;
+
+// Function to open the standalone window
+function openPhoneWindow() {
+  // Check if window already exists
+  if (phoneWindow && !chrome.runtime.lastError) {
+    // Focus the existing window
+    chrome.windows.update(phoneWindowId, { focused: true }, (window) => {
+      if (chrome.runtime.lastError) {
+        // Window doesn't exist anymore, create a new one
+        createNewPhoneWindow();
+      }
+    });
+  } else {
+    // Create a new window
+    createNewPhoneWindow();
+  }
+}
+
+// Function to create a new phone window
+function createNewPhoneWindow() {
+  chrome.windows.create({
+    url: 'popup.html',
+    type: 'popup',
+    width: 400,
+    height: 600
+  }, (window) => {
+    phoneWindow = window;
+    phoneWindowId = window.id;
+
+    // Listen for window close event
+    chrome.windows.onRemoved.addListener((windowId) => {
+      if (windowId === phoneWindowId) {
+        phoneWindow = null;
+        phoneWindowId = null;
+      }
+    });
+  });
+}
+
+// Listen for browser action click
+chrome.browserAction.onClicked.addListener(() => {
+  openPhoneWindow();
+});
+
 // Listen for installation
 chrome.runtime.onInstalled.addListener(() => {
   console.log('WebRTC SIP Client extension installed');
@@ -239,13 +286,27 @@ async function connect(server, wsServerUrl, username, password, displayName) {
         // Store the session reference
         currentCall = session;
 
+        // Extract caller information from the session
+        let caller = 'Unknown';
+        if (session && session.request && session.request.from) {
+          // Try to get the display name or URI
+          const fromHeader = session.request.from;
+          if (fromHeader.displayName) {
+            caller = fromHeader.displayName;
+          } else if (fromHeader.uri) {
+            caller = fromHeader.uri.user + '@' + fromHeader.uri.host;
+          }
+          logWithDetails('CALLER_INFO', { caller });
+        }
+
         // Store the fact that we have an incoming call in a more persistent way
         chrome.storage.local.set({ hasIncomingCall: true });
 
         updateConnectionState({
           callStatus: 'Incoming call...',
           hasActiveCall: true,
-          callDirection: 'incoming'
+          callDirection: 'incoming',
+          caller: caller
         });
 
         // Add direct event listeners for BYE packets

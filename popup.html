@@ -6,36 +6,61 @@
     <title>Phone</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body style="width: 400px; min-height: 600px;">
+<body>
     <div class="container">
         <h1>Phone</h1>
 
-        <div class="connection-section">
+
+
+        <div class="call-controls compact-form">
+            <div class="form-group">
+                <div class="input-with-button">
+                    <input type="text" id="callTo" placeholder="Enter number to call" required>
+                    <button id="callBtn" disabled title="Make call">Call</button>
+                </div>
+            </div>
+            <div class="call-action-buttons">
+                <button id="hangupBtn" disabled class="action-button danger-button">Hang Up</button>
+                <button id="answerBtn" disabled class="action-button success-button">Answer</button>
+            </div>
+            <div id="callStatus" class="call-status"></div>
+        </div>
+
+
+
+        <div class="media-container">
+            <div class="audio-elements">
+                <audio id="remoteAudio" autoplay></audio>
+                <audio id="localAudio" muted autoplay></audio>
+            </div>
+        </div>
+
+        <div class="settings-section">
             <div class="collapsible" id="connectionToggle">
-                <h2>Connection Settings</h2>
+                <h2>Settings</h2>
                 <span class="collapsible-icon">▼</span>
             </div>
             <div class="collapsible-content" id="connectionContent">
-                <div class="connection-settings compact-form">
+                <div class="settings-form compact-form">
                     <div class="form-group">
-                        <label for="sipServer">SIP Server:</label>
+                        <label for="sipServer">SIP Server</label>
                         <input type="text" id="sipServer" placeholder="example.com" value="example.com">
                     </div>
                     <div class="form-group">
-                        <label for="wsServer">WebSocket URL:</label>
+                        <label for="wsServer">WebSocket URL</label>
                         <input type="text" id="wsServer" placeholder="wss://example.com:7443/ws" value="wss://example.com:7443/ws">
                     </div>
                     <div class="form-group">
-                        <label for="sipUsername">Username:</label>
+                        <label for="sipUsername">Username</label>
                         <input type="text" id="sipUsername" placeholder="Enter username">
                     </div>
                     <div class="form-group">
-                        <label for="sipPassword">Password:</label>
-                        <input type="password" id="sipPassword" placeholder="Enter password">
+                        <label for="sipDisplayName">Display Name</label>
+                        <input type="text" id="sipDisplayName" placeholder="Enter display name">
                     </div>
                     <div class="form-group">
-                        <label for="sipDisplayName">Display Name:</label>
-                        <input type="text" id="sipDisplayName" placeholder="Enter display name">
+                        <label for="sipPassword">Password</label>
+                        <input type="password" id="sipPassword" placeholder="Enter password">
                     </div>
                     <div class="button-group">
                         <button id="connectBtn">Connect</button>
@@ -45,43 +70,15 @@
             </div>
         </div>
 
-        <div class="section-divider"></div>
-
-        <div class="call-controls compact-form">
-            <div class="form-group">
-                <label for="callTo">Destination:</label>
-                <div class="input-with-button">
-                    <input type="text" id="callTo" placeholder="1002@example.com" required>
-                    <button id="callBtn" disabled title="Make call">Call</button>
-                </div>
-                <small class="form-text">Enter destination address (e.g., 1002@example.com)</small>
-            </div>
-            <div class="call-action-buttons">
-                <button id="hangupBtn" disabled class="action-button danger-button">Hang Up</button>
-                <button id="answerBtn" disabled class="action-button success-button">Answer</button>
-                <button id="rejectBtn" disabled class="action-button danger-button">Reject</button>
-            </div>
-        </div>
-
-        <div class="section-divider"></div>
-
-        <div class="status-container compact-form">
-            <h2>Status</h2>
+        <div class="status-bar">
+            <div class="username-display" id="usernameDisplay"></div>
             <div class="status-wrapper">
                 <span class="connection-indicator disconnected" id="connectionIndicator"></span>
                 <div id="status" class="status">Disconnected</div>
             </div>
-            <div id="callStatus" class="call-status"></div>
-        </div>
-
-        <div class="media-container">
-            <div class="audio-elements">
-                <audio id="remoteAudio" autoplay></audio>
-                <audio id="localAudio" muted autoplay></audio>
-            </div>
         </div>
     </div>
-    <script src="js/popup.js"></script>
+    <script src="js/popup.js" type="module"></script>
 </body>
 </html>
 

@@ -1,4 +1,5 @@
 // Popup script for the WebRTC SIP Client extension
+import { createIncomingCallNotification, stopNotifications } from './notifications.js';
 
 // Enhanced logging function
 function logWithDetails(action, details = {}) {
@@ -32,7 +33,7 @@ function logWithDetails(action, details = {}) {
 
 // DOM Elements
 const elements = {
-    // Connection settings
+    // Settings
     sipServer: document.getElementById('sipServer'),
     wsServer: document.getElementById('wsServer'),
     sipUsername: document.getElementById('sipUsername'),
@@ -42,13 +43,13 @@ const elements = {
     disconnectBtn: document.getElementById('disconnectBtn'),
     connectionToggle: document.getElementById('connectionToggle'),
     connectionContent: document.getElementById('connectionContent'),
+    usernameDisplay: document.getElementById('usernameDisplay'),
 
     // Call controls
     callTo: document.getElementById('callTo'),
     callBtn: document.getElementById('callBtn'),
     hangupBtn: document.getElementById('hangupBtn'),
     answerBtn: document.getElementById('answerBtn'),
-    rejectBtn: document.getElementById('rejectBtn'),
 
     // Status elements
     status: document.getElementById('status'),
@@ -68,11 +69,14 @@ function init() {
     elements.callBtn.addEventListener('click', makeCall);
     elements.hangupBtn.addEventListener('click', (event) => hangup(event));
     elements.answerBtn.addEventListener('click', answer);
-    elements.rejectBtn.addEventListener('click', reject);
 
     // Set default WebSocket URL if SIP server is changed
     elements.sipServer.addEventListener('change', updateDefaultWebSocketUrl);
     elements.sipServer.addEventListener('input', updateDefaultWebSocketUrl);
+
+    // Set default display name from username
+    elements.sipUsername.addEventListener('change', updateDefaultDisplayName);
+    elements.sipUsername.addEventListener('input', updateDefaultDisplayName);
 
     // Setup collapsible sections
     setupCollapsibleSections();
@@ -84,12 +88,14 @@ function init() {
     checkMicrophonePermission();
 
     // Check for incoming calls immediately
-    chrome.storage.local.get(['hasIncomingCall'], (result) => {
+    chrome.storage.local.get(['hasIncomingCall', 'connectionState'], (result) => {
         if (result.hasIncomingCall) {
             logWithDetails('FOUND_INCOMING_CALL_FLAG', { onInit: true });
             elements.answerBtn.disabled = false;
-            elements.rejectBtn.disabled = false;
-            updateCallStatus('Incoming call...');
+            // Get caller from storage if available
+            const caller = result.connectionState && result.connectionState.caller ?
+                result.connectionState.caller : null;
+            updateCallStatus('Incoming call...', caller);
         }
     });
 
@@ -165,9 +171,32 @@ function init() {
 // Update default WebSocket URL based on SIP server
 function updateDefaultWebSocketUrl() {
     const server = elements.sipServer.value.trim();
-    if (server && !elements.wsServer.value.trim()) {
-        elements.wsServer.value = `wss://${server}:7443/ws`;
+    if (server) {
+        // Always update the WebSocket URL to match the SIP server domain
+        const currentWsUrl = elements.wsServer.value.trim();
+        const newWsUrl = `wss://${server}:7443/ws`;
+
+        // Update the WebSocket URL
+        elements.wsServer.value = newWsUrl;
+
+        logWithDetails('WEBSOCKET_URL_UPDATED', {
+            sipServer: server,
+            oldWsUrl: currentWsUrl,
+            newWsUrl: newWsUrl
+        });
     }
+}
+
+// Update default display name based on username
+function updateDefaultDisplayName() {
+    const username = elements.sipUsername.value.trim();
+    // Always update the display name to match the username
+    elements.sipDisplayName.value = username;
+
+    logWithDetails('DISPLAY_NAME_UPDATED', {
+        username: username,
+        displayName: username
+    });
 }
 
 // Update the UI status
@@ -176,8 +205,23 @@ function updateStatus(message) {
 }
 
 // Update call status
-function updateCallStatus(message) {
-    elements.callStatus.textContent = message;
+function updateCallStatus(message, caller = null) {
+    // Clear previous content
+    elements.callStatus.innerHTML = '';
+
+    // Add main status message
+    const statusLine = document.createElement('div');
+    statusLine.textContent = message;
+    statusLine.className = 'call-status-main';
+    elements.callStatus.appendChild(statusLine);
+
+    // Add caller info on second line if provided
+    if (caller) {
+        const callerLine = document.createElement('div');
+        callerLine.textContent = caller;
+        callerLine.className = 'call-status-caller';
+        elements.callStatus.appendChild(callerLine);
+    }
 }
 
 // Update button states
@@ -189,10 +233,9 @@ function updateButtonState(connected, hasActiveCall = false) {
     if (hasActiveCall) {
         elements.hangupBtn.disabled = false;
         elements.answerBtn.disabled = true;
-        elements.rejectBtn.disabled = true;
     } else {
         elements.hangupBtn.disabled = true;
-        // Answer and reject buttons are controlled by incoming calls
+        // Answer button is controlled by incoming calls
     }
 }
 
@@ -245,12 +288,12 @@ function setupCollapsibleSections() {
             content.classList.add('open');
         }
 
-        logWithDetails('TOGGLE_CONNECTION_SECTION', {
+        logWithDetails('TOGGLE_SETTINGS_SECTION', {
             isOpen: content.classList.contains('open')
         });
     });
 
-    // Open connection settings by default when not connected
+    // Open settings by default when not connected
     chrome.storage.local.get(['isConnected'], (result) => {
         if (!result.isConnected) {
             elements.connectionContent.classList.add('open');
@@ -265,14 +308,21 @@ function updateUIFromState(state) {
 
     // Update status
     updateStatus(state.status || 'Disconnected');
-    updateCallStatus(state.callStatus || '');
+    updateCallStatus(state.callStatus || '', state.caller || null);
 
-    // Update connection indicator
+    // Update connection indicator and username display
     if (state.isConnected) {
         elements.connectionIndicator.classList.remove('disconnected');
         elements.connectionIndicator.classList.add('connected');
 
-        // Auto-collapse connection settings when connected
+        // Display username when connected
+        chrome.storage.local.get(['sipUsername'], (result) => {
+            if (result.sipUsername) {
+                elements.usernameDisplay.textContent = result.sipUsername;
+            }
+        });
+
+        // Auto-collapse settings when connected
         if (elements.connectionContent.classList.contains('open')) {
             elements.connectionContent.classList.remove('open');
             elements.connectionToggle.classList.remove('active');
@@ -281,7 +331,10 @@ function updateUIFromState(state) {
         elements.connectionIndicator.classList.remove('connected');
         elements.connectionIndicator.classList.add('disconnected');
 
-        // Auto-expand connection settings when disconnected
+        // Clear username when disconnected
+        elements.usernameDisplay.textContent = '';
+
+        // Auto-expand settings when disconnected
         if (!elements.connectionContent.classList.contains('open')) {
             elements.connectionContent.classList.add('open');
             elements.connectionToggle.classList.add('active');
@@ -295,17 +348,22 @@ function updateUIFromState(state) {
     if (state.hasActiveCall && state.callStatus === 'Incoming call...') {
         logWithDetails('INCOMING_CALL_DETECTED', { fromState: true });
         elements.answerBtn.disabled = false;
-        elements.rejectBtn.disabled = false;
+
+        // Show notification with audio alert
+        const caller = state.caller || 'Unknown';
+        createIncomingCallNotification(caller);
     }
 
     // Also check storage for incoming call flag
-    chrome.storage.local.get(['hasIncomingCall'], (result) => {
+    chrome.storage.local.get(['hasIncomingCall', 'connectionState'], (result) => {
         if (result.hasIncomingCall) {
             logWithDetails('INCOMING_CALL_FLAG_FOUND', { fromStorage: true });
             elements.answerBtn.disabled = false;
-            elements.rejectBtn.disabled = false;
             if (!state.callStatus || state.callStatus !== 'Incoming call...') {
-                updateCallStatus('Incoming call...');
+                // Get caller from storage if available
+                const caller = result.connectionState && result.connectionState.caller ?
+                    result.connectionState.caller : null;
+                updateCallStatus('Incoming call...', caller);
             }
         }
     });
@@ -337,6 +395,9 @@ async function connect() {
             isConnected: false // Will be updated when connection is successful
         });
 
+        // Display username immediately
+        elements.usernameDisplay.textContent = username;
+
         // Send connect message to background script
         updateStatus('Connecting...');
         chrome.runtime.sendMessage({
@@ -360,6 +421,9 @@ async function connect() {
 // Disconnect from server
 async function disconnect() {
     try {
+        // Clear username display
+        elements.usernameDisplay.textContent = '';
+
         updateStatus('Disconnecting...');
         chrome.runtime.sendMessage({ action: 'disconnect' }, (response) => {
             if (response) {
@@ -439,6 +503,8 @@ async function makeCall() {
 async function answer() {
     logWithDetails('ANSWER_CALL_POPUP');
     try {
+        // Stop any active notifications and ringtones
+        stopNotifications();
         // Request microphone permission before answering the call
         try {
             logWithDetails('REQUESTING_MIC_PERMISSION_FOR_ANSWER');
@@ -472,28 +538,7 @@ async function answer() {
     }
 }
 
-// Reject incoming call
-async function reject() {
-    logWithDetails('REJECT_CALL_POPUP');
-    try {
-        // Send reject message to background script
-        logWithDetails('SENDING_REJECT_MESSAGE');
-        chrome.runtime.sendMessage({ action: 'reject' }, (response) => {
-            if (response) {
-                logWithDetails('REJECT_RESPONSE', {
-                    success: response.success,
-                    state: response.state
-                });
-                updateUIFromState(response.state);
-            } else {
-                logWithDetails('REJECT_NO_RESPONSE');
-            }
-        });
-    } catch (error) {
-        logWithDetails('REJECT_ERROR_POPUP', { error });
-        updateCallStatus(`Failed to reject: ${error.message}`);
-    }
-}
+// Note: Reject functionality removed as it was not working properly
 
 // Hang up active call
 async function hangup(event) {
@@ -505,6 +550,9 @@ async function hangup(event) {
 
     logWithDetails('HANGUP_CALL_POPUP');
     try {
+        // Stop any active notifications and ringtones
+        stopNotifications();
+
         // Disable the hangup button to prevent multiple clicks
         elements.hangupBtn.disabled = true;
         updateCallStatus('Hanging up...');
