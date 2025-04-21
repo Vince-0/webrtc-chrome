@@ -1,5 +1,7 @@
 // Popup script for the WebRTC SIP Client extension
 import { createIncomingCallNotification, stopNotifications } from './notifications.js';
+import { playDialTone, stopDialTone } from '../audio/dialtone.js';
+import { playHangupSound } from '../audio/hangupsound.js';
 
 // Enhanced logging function
 function logWithDetails(action, details = {}) {
@@ -122,6 +124,9 @@ function init() {
                 updateCallStatus(message.state.callStatus || 'Call ended');
                 updateButtonState(message.state.isConnected, false);
 
+                // Play hangup sound
+                playHangupSound();
+
                 // Stop local audio stream if it exists
                 if (elements.localAudio.srcObject) {
                     logWithDetails('STOPPING_LOCAL_AUDIO_STREAM_ON_BYE');
@@ -160,6 +165,11 @@ function init() {
 
                 // Re-enable the hangup button
                 elements.hangupBtn.disabled = false;
+            }
+
+            // Stop dialing tone if call is connected
+            if (message.state.callStatus === 'Call connected') {
+                stopDialTone();
             }
 
             // Always update the full UI state
@@ -478,6 +488,9 @@ async function makeCall() {
 
         const server = elements.sipServer.value.trim();
 
+        // Play dialing tone
+        playDialTone();
+
         // Send makeCall message to background script
         updateCallStatus('Calling...');
         logWithDetails('SENDING_MAKE_CALL_MESSAGE', { target, server });
@@ -489,8 +502,14 @@ async function makeCall() {
             if (response) {
                 logWithDetails('MAKE_CALL_RESPONSE', { success: response.success });
                 updateUIFromState(response.state);
+
+                // If call failed, stop the dialing tone
+                if (!response.success) {
+                    stopDialTone();
+                }
             } else {
                 logWithDetails('MAKE_CALL_NO_RESPONSE');
+                stopDialTone();
             }
         });
     } catch (error) {
@@ -503,8 +522,9 @@ async function makeCall() {
 async function answer() {
     logWithDetails('ANSWER_CALL_POPUP');
     try {
-        // Stop any active notifications and ringtones
+        // Stop any active notifications, ringtones, and dialing tones
         stopNotifications();
+        stopDialTone();
         // Request microphone permission before answering the call
         try {
             logWithDetails('REQUESTING_MIC_PERMISSION_FOR_ANSWER');
@@ -550,12 +570,16 @@ async function hangup(event) {
 
     logWithDetails('HANGUP_CALL_POPUP');
     try {
-        // Stop any active notifications and ringtones
+        // Stop any active notifications, ringtones, and dialing tones
         stopNotifications();
+        stopDialTone();
 
         // Disable the hangup button to prevent multiple clicks
         elements.hangupBtn.disabled = true;
         updateCallStatus('Hanging up...');
+
+        // Play hangup sound
+        playHangupSound();
 
         // Create a promise to track the hangup completion
         const hangupPromise = new Promise((resolve) => {

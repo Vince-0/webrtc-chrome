@@ -96,8 +96,8 @@ function createNewPhoneWindow() {
   chrome.windows.create({
     url: 'popup.html',
     type: 'popup',
-    width: 400,
-    height: 600
+    width: 340, /* Reduced by 15% from 400 */
+    height: 330 /* Reduced by 45% from 600 */
   }, (window) => {
     phoneWindow = window;
     phoneWindowId = window.id;
@@ -342,6 +342,14 @@ async function connect(server, wsServerUrl, username, password, displayName) {
 
               // Clear the incoming call flag
               chrome.storage.local.set({ hasIncomingCall: false });
+
+              // Notify any open popups about the state change immediately with callTerminated flag
+              chrome.runtime.sendMessage({
+                action: 'stateUpdated',
+                state: connectionState,
+                callTerminated: true,
+                byeReceived: true
+              });
 
               // Call original handler if it exists
               if (originalOnBye) {

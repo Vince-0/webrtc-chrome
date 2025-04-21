@@ -41,13 +41,18 @@ UX: Rename the extension from WebRTC SIP Client to Phone.:CHECKPOINT:46
 UX: Incoming call status should display the number calling on a second line in the call status.:CHECKPOINT:58
 INFRA: The manifest description should be "A simple phone app for making and receiving voice calls directly from Chrome. Uses SIP.js":CHECKPOINT:59
 UX: Make the extension a standalone window that isnt attached to the browser extension button.:CHECKPOINT:59
+UX: Make the window length shorter by 45%:CHECKPOINT:60
+UX: Reduce the window width by 15%:CHECKPOINT:61
+UX: use the ring1.ogg file instead of ring1.mp3.:CHECKPOINT:62
+UX: Add an audio playback while the call is ringing / trying. I will provide an audio file dail1.ogg:CHECKPOINT:62
+UX: Add hangup1.ogg to play when the call is ended:CHECKPOINT:63,64
 
 
 #STATUS:PENDING:
-
+UX: Call transfers need to be implemented. There should be functions for this in SIP.js documentation but a transfer button needs to be created and displayed once a call is up.
 
 #STATUS:NEW:
-UX: Add an audio playback while the call is ringing / tying. I will provide an audio file dailing.mp3
+
 UX: Call log feature should be added to keep a history of calls made and received. It should be displayed in a collapsible section above the settings section. It should show 5 history entries and be scrollable.
 
 INFRA: Console logging should be an optional toggle setting in the Settings menu. Disabling it should remove all logging from the console.

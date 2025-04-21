@@ -11,7 +11,7 @@ function playRingtone() {
 
       // Use the provided ringtone file
       // Use chrome.runtime.getURL to get the correct path in the extension
-      audioElement.src = chrome.runtime.getURL('audio/ring1.mp3');
+      audioElement.src = chrome.runtime.getURL('audio/ring1.ogg');
       audioElement.loop = true;
     }
 

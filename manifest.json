@@ -26,6 +26,8 @@
   },
 
   "web_accessible_resources": [
-    "audio/ring1.mp3"
+    "audio/ring1.ogg",
+    "audio/dial1.ogg",
+    "audio/hangup1.ogg"
   ]
 }

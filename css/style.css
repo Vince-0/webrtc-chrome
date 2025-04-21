@@ -9,10 +9,10 @@ body {
     line-height: 1.6;
     color: #333;
     background-color: #fff;
-    padding: 10px;
+    padding: 5px;
     overflow-x: hidden;
-    width: 380px;
-    min-height: 340px;
+    width: 323px; /* Reduced by 15% from 380px */
+    min-height: 187px; /* Reduced by 45% from 340px */
     margin: 0 auto;
 }
 
@@ -20,23 +20,23 @@ body {
     width: 100%;
     margin: 0 auto;
     background-color: #fff;
-    padding: 10px;
+    padding: 5px;
     border-radius: 5px;
     box-shadow: none;
 }
 
 h1 {
     text-align: center;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     color: #2c3e50;
     font-size: 1.3em;
 }
 
 h2 {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     color: #3498db;
     border-bottom: 1px solid #eee;
-    padding-bottom: 5px;
+    padding-bottom: 3px;
     font-size: 0.8em;
     text-align: center;
 }
@@ -45,26 +45,26 @@ h2 {
 .call-controls,
 .status-container,
 .media-container {
-    margin-bottom: 10px;
+    margin-bottom: 5px;
 }
 
 .settings-section {
-    margin-top: 15px;
-    margin-bottom: 15px;
+    margin-top: 8px;
+    margin-bottom: 8px;
     text-align: center;
 }
 
 .status-bar {
-    margin-top: 15px;
+    margin-top: 8px;
 }
 
 .form-group {
-    margin-bottom: 5px;
+    margin-bottom: 3px;
 }
 
 label {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
     font-weight: bold;
     text-align: center;
 }
@@ -72,7 +72,7 @@ label {
 input[type="text"],
 input[type="password"] {
     width: 100%;
-    padding: 8px;
+    padding: 5px;
     border: 1px solid #ddd;
     border-radius: 4px;
     text-align: center;
@@ -86,11 +86,12 @@ button {
     background-color: #3498db;
     color: white;
     border: none;
-    padding: 10px 15px;
-    margin-right: 10px;
+    padding: 5px 8px;
+    margin-right: 4px;
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.3s;
+    font-size: 0.95em;
 }
 
 button:hover {
@@ -280,7 +281,7 @@ button:disabled {
 }
 
 .compact-form button {
-    padding: 8px 12px;
+    padding: 5px 8px;
     margin-right: 0;
     font-size: 0.9em;
 }
