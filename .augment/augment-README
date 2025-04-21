@@ -8,22 +8,32 @@ This project is a Chrome extension that provides a WebRTC-based SIP client for m
 - Making outbound calls
 - Receiving inbound calls
 - Basic call controls (answer, reject, hang up)
-- Connection status display
+- Connection status display with visual indicators
 - Chrome extension integration with storage and permissions APIs
 - Automatic microphone permission handling
+- Persistent settings across browser sessions
+- Collapsible connection settings section
+- Minimalist, compact UI design
+- Enhanced error handling and logging
 
 ## Directory Structure
 - `/` - Root directory containing the main application files
   - `manifest.json` - Chrome extension manifest file
   - `popup.html` - The main extension popup interface
+  - `background.html` - Background page for the extension
   - `/js` - JavaScript files
-    - `sip-client.js` - Core SIP client implementation
-    - `sip-0.21.2.min.js` - SIP.js library (minified)
-    - `background.js` - Chrome extension background service worker
+    - `popup.js` - UI logic for the popup interface
+    - `background.js` - Background script for handling SIP communication
+    - `sip.js` - SIP.js library for WebRTC SIP functionality
   - `/css` - Stylesheets
-    - `style.css` - Styling for the extension
+    - `style.css` - Styling for the extension UI
   - `/icons` - Directory containing extension icons
     - `icon16.png` - 16x16 icon for the extension
+  - `/.augment` - Project documentation and management
+    - `augment-guidelines` - Workflow guidelines for the project
+    - `augment-tasklist` - Task tracking for the project
+    - `augment-chathistory` - History of development conversations
+    - `augment-README` - Comprehensive project documentation
 
 ## Prerequisites
 - Google Chrome browser
@@ -46,30 +56,60 @@ The extension requires the following configuration:
 
 ## Usage
 1. Click on the extension icon in Chrome to open the popup
-2. Enter your SIP server details and credentials
-3. Click "Connect" to register with the SIP server
-4. Once connected, you can make calls by entering a destination and clicking "Call"
-5. For incoming calls, use the "Answer" or "Reject" buttons
+2. The Connection Settings section will be expanded if you're not connected
+3. Enter your SIP server details and credentials
+4. Click "Connect" to register with the SIP server
+5. Once connected, the Connection Settings section will automatically collapse
+6. Make calls by entering a destination and clicking "Call"
+7. For incoming calls, use the "Answer" or "Reject" buttons
+8. End active calls with the "Hang Up" button
+9. The connection status is indicated by a colored dot (green for connected, red for disconnected)
+10. Connection settings can be accessed again by clicking on the Connection Settings header
 
 ## Key Files
 - `popup.html`: Contains the user interface elements for the extension popup
-- `sip-client.js`: Contains the core functionality for SIP communication, including:
+- `popup.js`: Contains the UI logic and event handling for the popup interface
+- `background.js`: Contains the core functionality for SIP communication, including:
   - Connection management
   - Call handling
-  - UI state management
+  - State management
+  - Event handling for SIP events
+- `style.css`: Contains all styling for the extension UI
 
 ## Key Functions
-- `connect()`: Establishes connection to the SIP server and registers the user
+### Background Script (background.js)
+- `connect()`: Establishes connection to the SIP server
+- `register()`: Registers the user with the SIP server
 - `makeCall()`: Initiates an outbound call to a specified destination
 - `answer()`: Answers an incoming call
+- `reject()`: Rejects an incoming call
 - `hangup()`: Ends the current call
 - `disconnect()`: Unregisters from the SIP server and closes the connection
+- `handleSessionStateChange()`: Manages SIP session state changes
+- `updateConnectionState()`: Updates and broadcasts the connection state
+
+### Popup Script (popup.js)
+- `setupCollapsibleSections()`: Sets up the collapsible UI sections
+- `updateUIFromState()`: Updates the UI based on the current connection state
+- `updateButtonState()`: Updates button states based on call status
+- `loadSavedSettings()`: Loads saved settings from Chrome storage
 
 ## Pending Features
-- Settings page for connection and media configuration
+- Password persistence across sessions
+- Auto-filling WebSocket URL based on SIP Server input
 - Additional icon sizes (48px and 128px)
-- Improved error handling and notifications
-- Automated testing
+- Browser notifications for incoming calls with audio alerts
+- Automated testing for extension functionality
+- Packaging for distribution
+
+## Recent Improvements
+- Minimalist UI design with smaller headings and reduced visual clutter
+- Collapsible connection settings section that auto-hides when connected
+- Enhanced error handling and detailed logging for troubleshooting
+- Improved handling of BYE packets for call termination
+- Fixed issues with incoming call detection and handling
+- Persistent popup during call operations
+- Visual connection status indicators
 
 ## Known Issues
 - Microphone access may be denied, requiring proper permissions setup

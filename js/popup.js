@@ -40,6 +40,8 @@ const elements = {
     sipDisplayName: document.getElementById('sipDisplayName'),
     connectBtn: document.getElementById('connectBtn'),
     disconnectBtn: document.getElementById('disconnectBtn'),
+    connectionToggle: document.getElementById('connectionToggle'),
+    connectionContent: document.getElementById('connectionContent'),
 
     // Call controls
     callTo: document.getElementById('callTo'),
@@ -51,6 +53,7 @@ const elements = {
     // Status elements
     status: document.getElementById('status'),
     callStatus: document.getElementById('callStatus'),
+    connectionIndicator: document.getElementById('connectionIndicator'),
 
     // Media elements
     remoteAudio: document.getElementById('remoteAudio'),
@@ -59,7 +62,7 @@ const elements = {
 
 // Initialize the application
 function init() {
-    // Add event listeners
+    // Add event listeners for call controls
     elements.connectBtn.addEventListener('click', connect);
     elements.disconnectBtn.addEventListener('click', disconnect);
     elements.callBtn.addEventListener('click', makeCall);
@@ -71,6 +74,9 @@ function init() {
     elements.sipServer.addEventListener('change', updateDefaultWebSocketUrl);
     elements.sipServer.addEventListener('input', updateDefaultWebSocketUrl);
 
+    // Setup collapsible sections
+    setupCollapsibleSections();
+
     // Load saved settings from Chrome storage
     loadSavedSettings();
 
@@ -80,7 +86,7 @@ function init() {
     // Check for incoming calls immediately
     chrome.storage.local.get(['hasIncomingCall'], (result) => {
         if (result.hasIncomingCall) {
-            console.log('Found incoming call flag on popup init');
+            logWithDetails('FOUND_INCOMING_CALL_FLAG', { onInit: true });
             elements.answerBtn.disabled = false;
             elements.rejectBtn.disabled = false;
             updateCallStatus('Incoming call...');
@@ -226,6 +232,33 @@ function getStateFromBackground() {
     });
 }
 
+// Setup collapsible sections
+function setupCollapsibleSections() {
+    // Add click event to connection toggle
+    elements.connectionToggle.addEventListener('click', () => {
+        elements.connectionToggle.classList.toggle('active');
+        const content = elements.connectionContent;
+
+        if (content.classList.contains('open')) {
+            content.classList.remove('open');
+        } else {
+            content.classList.add('open');
+        }
+
+        logWithDetails('TOGGLE_CONNECTION_SECTION', {
+            isOpen: content.classList.contains('open')
+        });
+    });
+
+    // Open connection settings by default when not connected
+    chrome.storage.local.get(['isConnected'], (result) => {
+        if (!result.isConnected) {
+            elements.connectionContent.classList.add('open');
+            elements.connectionToggle.classList.add('active');
+        }
+    });
+}
+
 // Update UI based on state from background script
 function updateUIFromState(state) {
     logWithDetails('UPDATE_UI_FROM_STATE', state);
@@ -233,6 +266,27 @@ function updateUIFromState(state) {
     // Update status
     updateStatus(state.status || 'Disconnected');
     updateCallStatus(state.callStatus || '');
+
+    // Update connection indicator
+    if (state.isConnected) {
+        elements.connectionIndicator.classList.remove('disconnected');
+        elements.connectionIndicator.classList.add('connected');
+
+        // Auto-collapse connection settings when connected
+        if (elements.connectionContent.classList.contains('open')) {
+            elements.connectionContent.classList.remove('open');
+            elements.connectionToggle.classList.remove('active');
+        }
+    } else {
+        elements.connectionIndicator.classList.remove('connected');
+        elements.connectionIndicator.classList.add('disconnected');
+
+        // Auto-expand connection settings when disconnected
+        if (!elements.connectionContent.classList.contains('open')) {
+            elements.connectionContent.classList.add('open');
+            elements.connectionToggle.classList.add('active');
+        }
+    }
 
     // Update button states
     updateButtonState(state.isConnected, state.hasActiveCall);
@@ -255,6 +309,9 @@ function updateUIFromState(state) {
             }
         }
     });
+
+    // Save connection state to storage
+    chrome.storage.local.set({ isConnected: state.isConnected });
 }
 
 // Connect to SIP server
@@ -276,7 +333,8 @@ async function connect() {
             sipServer: server,
             wsServer: wsServerUrl,
             sipUsername: username,
-            sipDisplayName: displayName
+            sipDisplayName: displayName,
+            isConnected: false // Will be updated when connection is successful
         });
 
         // Send connect message to background script

@@ -1,23 +1,27 @@
 #STATUS:COMPLETE:
 WORKFLOW: Read the files in the .augment folder: augment-guidlienes, augment-tasklist. Explain what you understand about the guidelines for the workflow for this project.:CHECKPOINT:1
 INFRA: Create a Chrome extension from the WebRTC SIP client application. Consider manifest.json, permissions, and other necessary configurations.:CHECKPOINT:2,5,7
-
-
-#STATUS:PENDING:
 INFRA: The extension's state and actions should be stored in the Chrome storage API. This will allow the extension to remember the user's settings and connection state across browser sessions:CHECKPOINT:10,12,13,14
 INFRA: Introduce console logging for the simple user functions to help troubleshooting call button functions like hangup, answer, reject.:CHECKPOINT:15
 BUG: On incoming call, the BYE packet isn't resulting in a call status update:CHECKPOINT:16,18
 BUG: Extension not recognizing incoming INVITE messages:CHECKPOINT:17
 BUG: Hangup closes the extension and does not execute the BYE packet until reopening:CHECKPOINT:19
 BUG: Hangup does not seem to be sending the hangup packet and the switch isn't seeing any BYE packets:CHECKPOINT:19
+UX: Change WebRTC Client heading to be a smaller heading "Phone":CHECKPOINT:20
+UX: Reconfigure the layout so that the connection settings are in a separate section from the call controls.:CHECKPOINT:20
+UX: Remove the Call Control and Media Headings:CHECKPOINT:21
+UX: Make the Connection Settings, Status heading fonts smaller and centered:CHECKPOINT:21
+
+
+#STATUS:PENDING:
+UX: Put the Status section at the top, above the Connection Settings
 
 #STATUS:NEW:
 UX: Persist password
 UX: Autofill copy the SIP Server string to the WebsocketURL domain so it is not necessary to type it in.
-UX: Add a settings page to the extension for configuring all the Connection Settings and Media permissions. This page should replace the current Connection Settings section in the main window.
 BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
 UX: Add more extension icons (48px and 128px versions)
-UX: Implement proper error handling and notifications in the extension
+UX: Implement browser notifications for incoming calls with an audio alert and pop up.
 INFRA: Package the extension for distribution
 INFRA: Add automated tests for the extension functionality
 BUG: This extension includes the key file '\\wsl.localhost\Ubuntu-22.04\home\administrator\DEV\chrome-webrtc\certs\key.pem'. You probably don't want to do that.
