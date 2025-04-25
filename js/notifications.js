@@ -5,9 +5,26 @@ import { playRingtone, stopRingtone } from '../audio/ringtone.js';
 let activeNotification = null;
 // Flag to track if ringtone is playing
 let isRingtonePlaying = false;
+// Flag to prevent multiple notifications for the same call
+let notificationCreatedTimestamp = 0;
 
 // Create a notification for an incoming call
 function createIncomingCallNotification(caller = 'Unknown') {
+  // Prevent multiple notifications within 3 seconds
+  const now = Date.now();
+  const timeSinceLastNotification = now - notificationCreatedTimestamp;
+
+  // If we already have an active notification or it's been less than 3 seconds since the last one
+  if (activeNotification || timeSinceLastNotification < 3000) {
+    console.log('Notification already active or created recently, skipping duplicate');
+    // Still ensure the ringtone is playing
+    playRingtoneSound();
+    return;
+  }
+
+  // Update the timestamp
+  notificationCreatedTimestamp = now;
+
   // Check if notifications are supported
   if (!('Notification' in window)) {
     console.error('This browser does not support desktop notifications');

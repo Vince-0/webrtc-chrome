@@ -302,3 +302,71 @@ button:disabled {
 .connection-indicator.disconnected {
     background-color: #e74c3c;
 }
+
+/* Tab Navigation Styles */
+.tab-navigation {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 5px 8px;
+    background-color: #f8f9fa;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #666;
+    margin: 0 2px;
+    transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+    background-color: #e9ecef;
+    color: #333;
+}
+
+.tab-button.active {
+    background-color: #fff;
+    border-bottom: 2px solid #3498db;
+    color: #3498db;
+    font-weight: bold;
+}
+
+/* Tab Content Styles */
+.tab-content {
+    position: relative;
+}
+
+.tab-panel {
+    display: none;
+    padding: 5px 0;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* Call Log Styles */
+.call-log-container {
+    margin-top: 5px;
+}
+
+.call-log-entries {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    padding: 5px;
+    margin-top: 5px;
+}
+
+.call-log-placeholder {
+    text-align: center;
+    color: #999;
+    padding: 20px 0;
+}

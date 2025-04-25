@@ -53,12 +53,29 @@ UX: The answer button remains active after an inbound call is ended with 487 [OR
 UX: If the registration status is Unregistered the colored dot should be red. Currently it is green.:CHECKPOINT:82,84
 UX: On registration failure the disconnect button remains active, it should be disabled and the connect button should activate.:CHECKPOINT:85
 INFRA: USER_NOT_REGISTERED SIP 480 isn't handled when making an outbound call:CHECKPOINT:86
+UX: Add a settings tab to the top of the window so that there are 3 tabs: Phone, Settings, Call Log. The Phone tab should be the default tab. Each tab will be an independent view. The settings tab will be the same as the current settings section and replace it completely. The phone tab will be same as the call section and status sections.:CHECKPOINT:89
+UX: In settings tab, when trying to connect to register the registration status doesn't update from Connected to server, registering... to Registered. Check that the registration status is updating properly as well as the call status.:CHECKPOINT:90,92,93,94
+UX: On outbound call, the remote side rings and answers but the phone tab and call status does not update and answer the call:CHECKPOINT:95,96,97,100,101
+UX: On inbound call the phone tab and call status does not show the incoming call to be answered.:CHECKPOINT:95,96,97,100,101
+INFRA: Remove periodic UI refresh mechanism and ensure UI updates are driven purely by events:CHECKPOINT:104
+UX: The incoming call browser notification pops up three times. It should only show once.:CHECKPOINT:112
+UX: On outbound call, after pressing hangup, the hangup button remains active without an active call. If the call status is call ended, the hangup button should be disabled.:CHECKPOINT:95,113
 
 #STATUS:PENDING:
 
 
 
 #STATUS:NEW:
+
+UX: On outbound call, once the remote side answers, I press hangup but the phone hangup does not reach the remote side to end the call. The BYE packet does not get sent and is not seen by the connecting SIP server. This is not the case with an inbound call where if I press hangup the remote side gets it and ends the call on their side. This is also not the case while the call is ringing, whereby if I press hangup the remote side gets it and ends the call on their side.CHECKPOINT:105,106,107,111
+
+UX: On inbound call, when the remote side hangs up, the phone tab UI does not update with the appropriate call ended status. On outbound call, when the remote side hangs up, the phone tab UI does correctly update with the call ended status. Investigate how these two scenarios are different and fix the inbound call hangup:CHECKPOINT:102,103,105
+
+
+
+UX: In the settings tab, move the display name field under the password field. Retain the auto-fill function.
+
+UX: Add icons for the required sizes.
 
 UX: Call log feature should be added to keep a history of calls made and received. It should be displayed in a collapsible section above the settings section. It should show 5 history entries and be scrollable.
 
@@ -68,10 +85,6 @@ INFRA: DTMF
 INFRA: Hold
 INFRA: Mute
 INFRA: Click to call
-
-INFRA: Console logging should be an optional toggle setting in the Settings menu. Disabling it should remove all logging from the console.
-INFRA: Make state stored data properly secured because it includes user name and password.
-INFRA: Make the web socket communication secure so that it is not vulnerable to MITM attacks because it includes user name and password.
 
 INFRA: Manifest version 2 is deprecated, and support will be removed in 2024. See https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline for details.:CHECKPOINT:47,48,49,50,51,53,54
 UX: Persist password:CHECKPOINT:47
@@ -84,5 +97,13 @@ INFRA: SessionDescriptionHandler.getDescription failed - Error: Media devices no
 INFRA: TypeError: this._peerConnection.getReceivers is not a function:CHECKPOINT:54
 BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
 
-INFRA: Add automated tests for the extension functionality
+INFRA: Console logging can be removed and all code that uses it can be removed.
+
+INFRA: Make state stored data properly secured because it includes user name, password and server information.
+INFRA: Make the web socket communication secure so that it is not vulnerable to MITM attacks because it includes user name and password.
+
+INFRA: Review all the logic for any potential refactoring to simplify the code and reduce complexity and duplication.
+INFRA: Investigate any potential performance improvements.
+INFRA: Investigate for any potential security improvements.
+INFRA: Add automated tests for the extension functionality.
 INFRA: Package the extension for distribution

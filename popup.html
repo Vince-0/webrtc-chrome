@@ -10,37 +10,50 @@
     <div class="container">
         <h1>Phone</h1>
 
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-button active" data-tab="phone">Phone</button>
+            <button class="tab-button" data-tab="settings">Settings</button>
+            <button class="tab-button" data-tab="call-log">Call Log</button>
+        </div>
 
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Phone Tab -->
+            <div class="tab-panel active" id="phone-tab">
+                <div class="call-controls compact-form">
+                    <div class="form-group">
+                        <div class="input-with-button">
+                            <input type="text" id="callTo" placeholder="Enter number to call" required>
+                            <button id="callBtn" disabled title="Make call">Call</button>
+                        </div>
+                    </div>
+                    <div class="call-action-buttons">
+                        <button id="hangupBtn" disabled class="action-button danger-button">Hang Up</button>
+                        <button id="answerBtn" disabled class="action-button success-button">Answer</button>
+                    </div>
+                    <div id="callStatus" class="call-status"></div>
+                </div>
 
-        <div class="call-controls compact-form">
-            <div class="form-group">
-                <div class="input-with-button">
-                    <input type="text" id="callTo" placeholder="Enter number to call" required>
-                    <button id="callBtn" disabled title="Make call">Call</button>
+                <div class="media-container">
+                    <div class="audio-elements">
+                        <audio id="remoteAudio" autoplay></audio>
+                        <audio id="localAudio" muted autoplay></audio>
+                    </div>
+                </div>
+
+                <!-- Status bar in Phone tab -->
+                <div class="status-bar phone-status">
+                    <div class="username-display" id="usernameDisplay"></div>
+                    <div class="status-wrapper">
+                        <span class="connection-indicator disconnected" id="connectionIndicator"></span>
+                        <div id="status" class="status">Disconnected</div>
+                    </div>
                 </div>
             </div>
-            <div class="call-action-buttons">
-                <button id="hangupBtn" disabled class="action-button danger-button">Hang Up</button>
-                <button id="answerBtn" disabled class="action-button success-button">Answer</button>
-            </div>
-            <div id="callStatus" class="call-status"></div>
-        </div>
 
-
-
-        <div class="media-container">
-            <div class="audio-elements">
-                <audio id="remoteAudio" autoplay></audio>
-                <audio id="localAudio" muted autoplay></audio>
-            </div>
-        </div>
-
-        <div class="settings-section">
-            <div class="collapsible" id="connectionToggle">
-                <h2>Settings</h2>
-                <span class="collapsible-icon">▼</span>
-            </div>
-            <div class="collapsible-content" id="connectionContent">
+            <!-- Settings Tab -->
+            <div class="tab-panel" id="settings-tab">
                 <div class="settings-form compact-form">
                     <div class="form-group">
                         <label for="sipServer">SIP Server</label>
@@ -67,14 +80,29 @@
                         <button id="disconnectBtn" disabled>Disconnect</button>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="status-bar">
-            <div class="username-display" id="usernameDisplay"></div>
-            <div class="status-wrapper">
-                <span class="connection-indicator disconnected" id="connectionIndicator"></span>
-                <div id="status" class="status">Disconnected</div>
+                <!-- Call status in Settings tab -->
+                <div id="settingsCallStatus" class="call-status"></div>
+
+                <!-- Status bar in Settings tab -->
+                <div class="status-bar settings-status">
+                    <div class="username-display" id="settingsUsernameDisplay"></div>
+                    <div class="status-wrapper">
+                        <span class="connection-indicator disconnected" id="settingsConnectionIndicator"></span>
+                        <div id="settingsStatus" class="status">Disconnected</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Call Log Tab -->
+            <div class="tab-panel" id="call-log-tab">
+                <div class="call-log-container">
+                    <h2>Call History</h2>
+                    <div class="call-log-entries">
+                        <p class="call-log-placeholder">Call history will be displayed here.</p>
+                        <!-- Call log entries will be populated here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>

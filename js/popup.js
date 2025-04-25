@@ -43,8 +43,6 @@ const elements = {
     sipDisplayName: document.getElementById('sipDisplayName'),
     connectBtn: document.getElementById('connectBtn'),
     disconnectBtn: document.getElementById('disconnectBtn'),
-    connectionToggle: document.getElementById('connectionToggle'),
-    connectionContent: document.getElementById('connectionContent'),
     usernameDisplay: document.getElementById('usernameDisplay'),
 
     // Call controls
@@ -57,10 +55,17 @@ const elements = {
     status: document.getElementById('status'),
     callStatus: document.getElementById('callStatus'),
     connectionIndicator: document.getElementById('connectionIndicator'),
+    settingsStatus: document.getElementById('settingsStatus'),
+    settingsConnectionIndicator: document.getElementById('settingsConnectionIndicator'),
+    settingsUsernameDisplay: document.getElementById('settingsUsernameDisplay'),
 
     // Media elements
     remoteAudio: document.getElementById('remoteAudio'),
-    localAudio: document.getElementById('localAudio')
+    localAudio: document.getElementById('localAudio'),
+
+    // Tab elements
+    tabButtons: document.querySelectorAll('.tab-button'),
+    tabPanels: document.querySelectorAll('.tab-panel')
 };
 
 // Initialize the application
@@ -80,6 +85,9 @@ function init() {
     elements.sipUsername.addEventListener('change', updateDefaultDisplayName);
     elements.sipUsername.addEventListener('input', updateDefaultDisplayName);
 
+    // Setup tab navigation
+    setupTabNavigation();
+
     // Setup collapsible sections
     setupCollapsibleSections();
 
@@ -92,12 +100,27 @@ function init() {
     // Check for incoming calls immediately
     chrome.storage.local.get(['hasIncomingCall', 'connectionState'], (result) => {
         if (result.hasIncomingCall) {
-            logWithDetails('FOUND_INCOMING_CALL_FLAG', { onInit: true });
+            logWithDetails('FOUND_INCOMING_CALL_FLAG', {
+                onInit: true,
+                activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown'
+            });
+
+            // Make sure the answer button is enabled
             elements.answerBtn.disabled = false;
+
             // Get caller from storage if available
             const caller = result.connectionState && result.connectionState.caller ?
                 result.connectionState.caller : null;
+
+            // Update call status (this will also switch to Phone tab if needed)
             updateCallStatus('Incoming call...', caller);
+
+            // Force switch to Phone tab for incoming calls
+            const activeTabButton = document.querySelector('.tab-button.active');
+            if (activeTabButton && activeTabButton.getAttribute('data-tab') !== 'phone') {
+                logWithDetails('INIT_SWITCHING_TO_PHONE_TAB_FOR_INCOMING_CALL');
+                switchToTab('phone');
+            }
         }
     });
 
@@ -105,7 +128,7 @@ function init() {
     getStateFromBackground();
 
     // Listen for state updates from background script
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener((message) => {
         logWithDetails('POPUP_MESSAGE_RECEIVED', {
             action: message.action,
             callTerminated: message.callTerminated,
@@ -113,8 +136,100 @@ function init() {
             busyReceived: message.busyReceived,
             callCancelled: message.callCancelled,
             userNotRegistered: message.userNotRegistered,
-            rejectionReceived: message.rejectionReceived
+            rejectionReceived: message.rejectionReceived,
+            caller: message.caller || null,
+            state: message.state ? {
+                status: message.state.status,
+                callStatus: message.state.callStatus,
+                isConnected: message.state.isConnected,
+                hasActiveCall: message.state.hasActiveCall,
+                caller: message.state.caller || null
+            } : null
         });
+
+        // Handle specific message types
+        if (message.action === 'incomingCall') {
+            logWithDetails('INCOMING_CALL_MESSAGE_RECEIVED', {
+                caller: message.caller,
+                activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown'
+            });
+
+            // Enable the answer button
+            elements.answerBtn.disabled = false;
+
+            // Update call status
+            updateCallStatus('Incoming call...', message.caller);
+
+            // Show notification with audio alert
+            createIncomingCallNotification(message.caller || 'Unknown');
+
+            // Switch to the Phone tab
+            switchToTab('phone');
+
+            // Update UI state
+            if (message.state) {
+                updateUIFromState(message.state);
+            }
+        } else if (message.action === 'callAnswered') {
+            logWithDetails('CALL_ANSWERED_MESSAGE_RECEIVED', {
+                activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown'
+            });
+
+            // Stop dialing tone
+            stopDialTone();
+
+            // Switch to the Phone tab
+            switchToTab('phone');
+
+            // Update UI state
+            if (message.state) {
+                updateUIFromState(message.state);
+            }
+        } else if (message.action === 'callHangup') {
+            logWithDetails('CALL_HANGUP_MESSAGE_RECEIVED', {
+                activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown',
+                remoteHangup: message.remoteHangup || false,
+                byeReceived: message.byeReceived || false
+            });
+
+            // Stop any active dialing tone
+            stopDialTone();
+
+            // Stop any active ringtone for incoming calls
+            stopNotifications();
+
+            // Switch to the Phone tab
+            switchToTab('phone');
+
+            // Update call status with appropriate message
+            if (message.remoteHangup) {
+                updateCallStatus('Call ended by remote party');
+            } else {
+                updateCallStatus('Call ended');
+            }
+
+            // Play hangup sound
+            playHangupSound();
+
+            // Stop local audio stream if it exists
+            if (elements.localAudio.srcObject) {
+                logWithDetails('STOPPING_LOCAL_AUDIO_STREAM_ON_REMOTE_HANGUP');
+                elements.localAudio.srcObject.getTracks().forEach(track => {
+                    track.stop();
+                    logWithDetails('AUDIO_TRACK_STOPPED_ON_REMOTE_HANGUP', { trackId: track.id });
+                });
+                elements.localAudio.srcObject = null;
+            }
+
+            // Update UI state
+            if (message.state) {
+                updateUIFromState(message.state);
+            }
+        } else if (message.action === 'stateUpdated' ||
+                  (message.action === 'registrationStateChanged' && message.state)) {
+            // Force a state refresh to ensure both tabs are updated
+            getStateFromBackground();
+        }
 
         if (message.action === 'stateUpdated') {
             // Handle call termination specially
@@ -212,9 +327,21 @@ function init() {
                 elements.hangupBtn.disabled = false;
             }
 
-            // Stop dialing tone if call is connected
-            if (message.state.callStatus === 'Call connected') {
-                stopDialTone();
+            // Handle call state updates
+            if (message.state.callStatus) {
+                logWithDetails('CALL_STATUS_UPDATE_DETECTED', {
+                    callStatus: message.state.callStatus,
+                    activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown'
+                });
+
+                // Handle specific call states
+                if (message.state.callStatus === 'Call connected') {
+                    // Stop dialing tone
+                    stopDialTone();
+                } else if (message.state.callStatus === 'Incoming call...') {
+                    // Make sure the answer button is enabled
+                    elements.answerBtn.disabled = false;
+                }
             }
 
             // Always update the full UI state
@@ -256,11 +383,31 @@ function updateDefaultDisplayName() {
 
 // Update the UI status
 function updateStatus(message) {
-    elements.status.textContent = message;
+    // Update status in both tabs
+    if (elements.status) {
+        elements.status.textContent = message;
+    }
+
+    if (elements.settingsStatus) {
+        elements.settingsStatus.textContent = message;
+    }
+
+    logWithDetails('STATUS_UPDATED', {
+        message: message,
+        phoneTabUpdated: !!elements.status,
+        settingsTabUpdated: !!elements.settingsStatus
+    });
 }
 
 // Update call status
 function updateCallStatus(message, caller = null) {
+    // Log the call status update
+    logWithDetails('UPDATING_CALL_STATUS', {
+        message: message,
+        caller: caller,
+        activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown'
+    });
+
     // Clear previous content
     elements.callStatus.innerHTML = '';
 
@@ -277,6 +424,25 @@ function updateCallStatus(message, caller = null) {
         callerLine.className = 'call-status-caller';
         elements.callStatus.appendChild(callerLine);
     }
+
+    // Check if this is a call-related status that should trigger tab switch
+    const isCallRelatedStatus = message && (
+        message.includes('Incoming call') ||
+        message.includes('Call connected') ||
+        message.includes('Calling')
+    );
+
+    // If this is a call-related status and we're not on the Phone tab, switch to it
+    if (isCallRelatedStatus) {
+        const activeTabButton = document.querySelector('.tab-button.active');
+        if (activeTabButton && activeTabButton.getAttribute('data-tab') !== 'phone') {
+            logWithDetails('AUTO_SWITCHING_TO_PHONE_TAB_FOR_CALL_STATUS', {
+                callStatus: message,
+                caller: caller
+            });
+            switchToTab('phone');
+        }
+    }
 }
 
 // Update button states
@@ -286,10 +452,22 @@ function updateButtonState(connected, hasActiveCall = false, status = '') {
                                 status.includes('Registration failed') ||
                                 status.includes('Connection failed');
 
-    // Log the button state update
+    // Check if the call status indicates an active call
+    const callStatusIndicatesActiveCall = status && (
+        status.includes('Call connected') ||
+        status.includes('Incoming call') ||
+        status.includes('Calling')
+    );
+
+    // Determine the actual active call state based on both parameters
+    const isActuallyActiveCall = hasActiveCall || callStatusIndicatesActiveCall;
+
+    // Log the button state update with enhanced details
     logWithDetails('UPDATING_BUTTON_STATE', {
         connected: connected,
         hasActiveCall: hasActiveCall,
+        callStatusIndicatesActiveCall: callStatusIndicatesActiveCall,
+        isActuallyActiveCall: isActuallyActiveCall,
         status: status,
         isRegistrationFailure: isRegistrationFailure
     });
@@ -308,27 +486,55 @@ function updateButtonState(connected, hasActiveCall = false, status = '') {
         // Normal button state update based on connection status
         elements.connectBtn.disabled = connected;
         elements.disconnectBtn.disabled = !connected;
-        elements.callBtn.disabled = !connected || hasActiveCall;
+        elements.callBtn.disabled = !connected || isActuallyActiveCall;
     }
 
-    if (hasActiveCall) {
+    // Update hangup and answer buttons based on actual call state
+    if (isActuallyActiveCall) {
         elements.hangupBtn.disabled = false;
-        elements.answerBtn.disabled = true;
+
+        // Only disable answer button if we're not in an incoming call state
+        if (status !== 'Incoming call...') {
+            elements.answerBtn.disabled = true;
+        }
+
+        logWithDetails('ENABLED_HANGUP_BUTTON', {
+            reason: 'Active call detected',
+            hasActiveCall: hasActiveCall,
+            callStatus: status
+        });
     } else {
+        // No active call, disable hangup button
         elements.hangupBtn.disabled = true;
-        // Answer button is controlled by incoming calls
+
+        // Answer button is controlled by incoming calls elsewhere
+        // But make sure it's disabled if there's no incoming call
+        if (status !== 'Incoming call...') {
+            elements.answerBtn.disabled = true;
+        }
+
+        logWithDetails('DISABLED_HANGUP_BUTTON', {
+            reason: 'No active call',
+            hasActiveCall: hasActiveCall,
+            callStatus: status
+        });
     }
 }
 
 // Load saved settings from Chrome storage
 function loadSavedSettings() {
     chrome.storage.local.get(
-        ['sipServer', 'wsServer', 'sipUsername', 'sipDisplayName'],
+        ['sipServer', 'wsServer', 'sipUsername', 'sipDisplayName', 'activeTab'],
         (result) => {
             if (result.sipServer) elements.sipServer.value = result.sipServer;
             if (result.wsServer) elements.wsServer.value = result.wsServer;
             if (result.sipUsername) elements.sipUsername.value = result.sipUsername;
             if (result.sipDisplayName) elements.sipDisplayName.value = result.sipDisplayName;
+
+            // Restore active tab if saved
+            if (result.activeTab) {
+                switchToTab(result.activeTab);
+            }
         }
     );
 }
@@ -349,37 +555,28 @@ function checkMicrophonePermission() {
 
 // Get current state from background script
 function getStateFromBackground() {
+    logWithDetails('GETTING_STATE_FROM_BACKGROUND');
     chrome.runtime.sendMessage({ action: 'getState' }, (response) => {
         if (response && response.state) {
+            logWithDetails('RECEIVED_STATE_FROM_BACKGROUND', {
+                status: response.state.status,
+                callStatus: response.state.callStatus,
+                isConnected: response.state.isConnected,
+                hasActiveCall: response.state.hasActiveCall
+            });
             updateUIFromState(response.state);
+        } else {
+            logWithDetails('NO_STATE_RECEIVED_FROM_BACKGROUND');
         }
     });
 }
 
 // Setup collapsible sections
 function setupCollapsibleSections() {
-    // Add click event to connection toggle
-    elements.connectionToggle.addEventListener('click', () => {
-        elements.connectionToggle.classList.toggle('active');
-        const content = elements.connectionContent;
-
-        if (content.classList.contains('open')) {
-            content.classList.remove('open');
-        } else {
-            content.classList.add('open');
-        }
-
-        logWithDetails('TOGGLE_SETTINGS_SECTION', {
-            isOpen: content.classList.contains('open')
-        });
-    });
-
-    // Open settings by default when not connected
-    chrome.storage.local.get(['isConnected'], (result) => {
-        if (!result.isConnected) {
-            elements.connectionContent.classList.add('open');
-            elements.connectionToggle.classList.add('active');
-        }
+    // This function is now a no-op since we've moved to a tabbed interface
+    // and removed the collapsible sections
+    logWithDetails('COLLAPSIBLE_SECTIONS_SETUP_SKIPPED', {
+        reason: 'Moved to tabbed interface'
     });
 }
 
@@ -407,7 +604,16 @@ function updateUIFromState(state) {
     }
 
     // Update status
-    updateStatus(state.status || 'Disconnected');
+    // If connected, ensure the status shows as "Registered"
+    if (state.isConnected && state.status !== 'Unregistered') {
+        updateStatus('Registered');
+        logWithDetails('STATUS_FORCED_TO_REGISTERED', {
+            originalStatus: state.status,
+            isConnected: state.isConnected
+        });
+    } else {
+        updateStatus(state.status || 'Disconnected');
+    }
     updateCallStatus(state.callStatus || '', state.caller || null);
 
     // Update connection indicator and username display
@@ -416,30 +622,47 @@ function updateUIFromState(state) {
 
     if (state.isConnected && !isUnregistered) {
         // Only show connected (green) if actually registered
+        // Update both phone and settings tab indicators
         elements.connectionIndicator.classList.remove('disconnected');
         elements.connectionIndicator.classList.add('connected');
+
+        if (elements.settingsConnectionIndicator) {
+            elements.settingsConnectionIndicator.classList.remove('disconnected');
+            elements.settingsConnectionIndicator.classList.add('connected');
+        }
 
         logWithDetails('CONNECTION_INDICATOR_UPDATED', {
             status: 'connected',
             registrationStatus: state.status
         });
 
-        // Display username when connected
+        // Display username when connected in both tabs
         chrome.storage.local.get(['sipUsername'], (result) => {
             if (result.sipUsername) {
                 elements.usernameDisplay.textContent = result.sipUsername;
+                if (elements.settingsUsernameDisplay) {
+                    elements.settingsUsernameDisplay.textContent = result.sipUsername;
+                }
             }
         });
 
-        // Auto-collapse settings when connected
-        if (elements.connectionContent.classList.contains('open')) {
-            elements.connectionContent.classList.remove('open');
-            elements.connectionToggle.classList.remove('active');
+        // Auto-collapse settings when connected - no longer needed with tabbed interface
+        // We'll switch to the Phone tab instead
+        const activeTabButton = document.querySelector('.tab-button.active');
+        if (activeTabButton && activeTabButton.getAttribute('data-tab') === 'settings') {
+            logWithDetails('AUTO_SWITCHING_TO_PHONE_TAB_AFTER_CONNECT');
+            switchToTab('phone');
         }
     } else {
         // Show disconnected (red) if not connected or unregistered
+        // Update both phone and settings tab indicators
         elements.connectionIndicator.classList.remove('connected');
         elements.connectionIndicator.classList.add('disconnected');
+
+        if (elements.settingsConnectionIndicator) {
+            elements.settingsConnectionIndicator.classList.remove('connected');
+            elements.settingsConnectionIndicator.classList.add('disconnected');
+        }
 
         logWithDetails('CONNECTION_INDICATOR_UPDATED', {
             status: 'disconnected',
@@ -448,13 +671,18 @@ function updateUIFromState(state) {
             registrationStatus: state.status
         });
 
-        // Clear username when disconnected
+        // Clear username when disconnected in both tabs
         elements.usernameDisplay.textContent = '';
+        if (elements.settingsUsernameDisplay) {
+            elements.settingsUsernameDisplay.textContent = '';
+        }
 
-        // Auto-expand settings when disconnected
-        if (!elements.connectionContent.classList.contains('open')) {
-            elements.connectionContent.classList.add('open');
-            elements.connectionToggle.classList.add('active');
+        // Auto-expand settings when disconnected - no longer needed with tabbed interface
+        // We'll switch to the Settings tab instead
+        const activeTabButton = document.querySelector('.tab-button.active');
+        if (activeTabButton && activeTabButton.getAttribute('data-tab') !== 'settings') {
+            logWithDetails('AUTO_SWITCHING_TO_SETTINGS_TAB_AFTER_DISCONNECT');
+            switchToTab('settings');
         }
     }
 
@@ -463,24 +691,50 @@ function updateUIFromState(state) {
 
     // Handle incoming calls
     if (state.hasActiveCall && state.callStatus === 'Incoming call...') {
-        logWithDetails('INCOMING_CALL_DETECTED', { fromState: true });
+        logWithDetails('INCOMING_CALL_DETECTED', {
+            fromState: true,
+            caller: state.caller || 'Unknown',
+            activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown'
+        });
+
+        // Make sure the answer button is enabled
         elements.answerBtn.disabled = false;
 
         // Show notification with audio alert
         const caller = state.caller || 'Unknown';
         createIncomingCallNotification(caller);
+
+        // If we're not on the phone tab, switch to it to show the incoming call
+        const activeTabButton = document.querySelector('.tab-button.active');
+        if (activeTabButton && activeTabButton.getAttribute('data-tab') !== 'phone') {
+            logWithDetails('AUTO_SWITCHING_TO_PHONE_TAB_FOR_INCOMING_CALL');
+            switchToTab('phone');
+        }
     }
 
     // Also check storage for incoming call flag
     chrome.storage.local.get(['hasIncomingCall', 'connectionState'], (result) => {
         if (result.hasIncomingCall) {
-            logWithDetails('INCOMING_CALL_FLAG_FOUND', { fromStorage: true });
+            logWithDetails('INCOMING_CALL_FLAG_FOUND', {
+                fromStorage: true,
+                activeTab: document.querySelector('.tab-button.active')?.getAttribute('data-tab') || 'unknown'
+            });
+
+            // Make sure the answer button is enabled
             elements.answerBtn.disabled = false;
+
             if (!state.callStatus || state.callStatus !== 'Incoming call...') {
                 // Get caller from storage if available
                 const caller = result.connectionState && result.connectionState.caller ?
                     result.connectionState.caller : null;
                 updateCallStatus('Incoming call...', caller);
+
+                // If we're not on the phone tab, switch to it to show the incoming call
+                const activeTabButton = document.querySelector('.tab-button.active');
+                if (activeTabButton && activeTabButton.getAttribute('data-tab') !== 'phone') {
+                    logWithDetails('AUTO_SWITCHING_TO_PHONE_TAB_FOR_INCOMING_CALL_FROM_STORAGE');
+                    switchToTab('phone');
+                }
             }
         } else {
             // If there's no incoming call, make sure the answer button is disabled
@@ -518,8 +772,19 @@ async function connect() {
             isConnected: false // Will be updated when connection is successful
         });
 
-        // Display username immediately
-        elements.usernameDisplay.textContent = username;
+        // Display username immediately in both tabs
+        if (elements.usernameDisplay) {
+            elements.usernameDisplay.textContent = username;
+        }
+        if (elements.settingsUsernameDisplay) {
+            elements.settingsUsernameDisplay.textContent = username;
+        }
+
+        logWithDetails('USERNAME_DISPLAYED', {
+            username: username,
+            phoneTabUpdated: !!elements.usernameDisplay,
+            settingsTabUpdated: !!elements.settingsUsernameDisplay
+        });
 
         // Send connect message to background script
         updateStatus('Connecting...');
@@ -544,8 +809,18 @@ async function connect() {
 // Disconnect from server
 async function disconnect() {
     try {
-        // Clear username display
-        elements.usernameDisplay.textContent = '';
+        // Clear username display in both tabs
+        if (elements.usernameDisplay) {
+            elements.usernameDisplay.textContent = '';
+        }
+        if (elements.settingsUsernameDisplay) {
+            elements.settingsUsernameDisplay.textContent = '';
+        }
+
+        logWithDetails('USERNAME_CLEARED', {
+            phoneTabUpdated: !!elements.usernameDisplay,
+            settingsTabUpdated: !!elements.settingsUsernameDisplay
+        });
 
         updateStatus('Disconnecting...');
         chrome.runtime.sendMessage({ action: 'disconnect' }, (response) => {
@@ -746,18 +1021,129 @@ async function hangup(event) {
             elements.localAudio.srcObject = null;
         }
 
-        // Re-enable the hangup button after a delay
+        // Check call state before re-enabling the hangup button
         setTimeout(() => {
-            elements.hangupBtn.disabled = false;
+            // Get the current state to determine if we should re-enable the button
+            chrome.runtime.sendMessage({ action: 'getState' }, (response) => {
+                if (response && response.state) {
+                    const state = response.state;
+                    logWithDetails('CHECKING_CALL_STATE_BEFORE_REENABLING_HANGUP', {
+                        hasActiveCall: state.hasActiveCall,
+                        callStatus: state.callStatus
+                    });
+
+                    // Only re-enable the hangup button if there's an active call
+                    if (state.hasActiveCall) {
+                        elements.hangupBtn.disabled = false;
+                        logWithDetails('HANGUP_BUTTON_REENABLED', { reason: 'Active call exists' });
+                    } else {
+                        elements.hangupBtn.disabled = true;
+                        logWithDetails('HANGUP_BUTTON_KEPT_DISABLED', { reason: 'No active call' });
+                    }
+                } else {
+                    // If we can't get the state, keep the button disabled to be safe
+                    elements.hangupBtn.disabled = true;
+                    logWithDetails('HANGUP_BUTTON_KEPT_DISABLED', { reason: 'Could not get state' });
+                }
+            });
         }, 2000);
 
     } catch (error) {
         logWithDetails('HANGUP_ERROR_POPUP', { error });
         updateCallStatus(`Failed to hang up: ${error.message}`);
-        // Re-enable the hangup button
-        elements.hangupBtn.disabled = false;
+
+        // Check call state before re-enabling the hangup button
+        chrome.runtime.sendMessage({ action: 'getState' }, (response) => {
+            if (response && response.state) {
+                const state = response.state;
+                logWithDetails('CHECKING_CALL_STATE_AFTER_ERROR', {
+                    hasActiveCall: state.hasActiveCall,
+                    callStatus: state.callStatus
+                });
+
+                // Only re-enable the hangup button if there's an active call
+                if (state.hasActiveCall) {
+                    elements.hangupBtn.disabled = false;
+                    logWithDetails('HANGUP_BUTTON_REENABLED_AFTER_ERROR', { reason: 'Active call exists' });
+                } else {
+                    elements.hangupBtn.disabled = true;
+                    logWithDetails('HANGUP_BUTTON_KEPT_DISABLED_AFTER_ERROR', { reason: 'No active call' });
+                }
+            } else {
+                // If we can't get the state, keep the button disabled to be safe
+                elements.hangupBtn.disabled = true;
+                logWithDetails('HANGUP_BUTTON_KEPT_DISABLED_AFTER_ERROR', { reason: 'Could not get state' });
+            }
+        });
+    }
+}
+
+// Setup tab navigation
+function setupTabNavigation() {
+    // Add click event to each tab button
+    elements.tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabId = button.getAttribute('data-tab');
+            switchToTab(tabId);
+
+            // Save active tab to storage
+            chrome.storage.local.set({ activeTab: tabId });
+
+            logWithDetails('TAB_SWITCHED', {
+                tabId: tabId
+            });
+        });
+    });
+}
+
+// Switch to a specific tab
+function switchToTab(tabId) {
+    // Remove active class from all buttons and panels
+    elements.tabButtons.forEach(btn => btn.classList.remove('active'));
+    elements.tabPanels.forEach(panel => panel.classList.remove('active'));
+
+    // Add active class to the selected button and panel
+    const activeButton = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
+    if (activeButton) {
+        activeButton.classList.add('active');
+    }
+
+    let activePanel;
+    switch(tabId) {
+        case 'phone':
+            activePanel = document.getElementById('phone-tab');
+            break;
+        case 'settings':
+            activePanel = document.getElementById('settings-tab');
+            break;
+        case 'call-log':
+            activePanel = document.getElementById('call-log-tab');
+            break;
+        default:
+            activePanel = document.getElementById('phone-tab');
+            tabId = 'phone';
+    }
+
+    if (activePanel) {
+        activePanel.classList.add('active');
+
+        logWithDetails('TAB_SWITCHED_TO', {
+            tabId: tabId,
+            panelId: activePanel.id
+        });
     }
 }
 
 // Initialize the application when the page loads
-window.addEventListener('load', init);
+window.addEventListener('load', () => {
+    logWithDetails('WINDOW_LOADED');
+    init();
+
+    // Get initial state once on load
+    getStateFromBackground();
+
+    // No periodic refresh - UI updates will be driven by events only
+    window.addEventListener('unload', () => {
+        logWithDetails('WINDOW_UNLOADED');
+    });
+});
