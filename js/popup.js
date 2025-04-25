@@ -109,7 +109,11 @@ function init() {
         logWithDetails('POPUP_MESSAGE_RECEIVED', {
             action: message.action,
             callTerminated: message.callTerminated,
-            byeReceived: message.byeReceived
+            byeReceived: message.byeReceived,
+            busyReceived: message.busyReceived,
+            callCancelled: message.callCancelled,
+            userNotRegistered: message.userNotRegistered,
+            rejectionReceived: message.rejectionReceived
         });
 
         if (message.action === 'stateUpdated') {
@@ -117,11 +121,52 @@ function init() {
             if (message.callTerminated) {
                 logWithDetails('CALL_TERMINATION_NOTIFICATION', {
                     byeReceived: message.byeReceived,
-                    state: message.state
+                    busyReceived: message.busyReceived,
+                    callCancelled: message.callCancelled,
+                    userNotRegistered: message.userNotRegistered,
+                    rejectionReceived: message.rejectionReceived,
+                    state: message.state,
+                    callStatus: message.state.callStatus
                 });
 
-                // Update UI with call ended status
-                updateCallStatus(message.state.callStatus || 'Call ended');
+                // Make sure to stop any active dialing tone FIRST
+                // This ensures the tone stops immediately when call is terminated
+                logWithDetails('STOPPING_DIAL_TONE_ON_CALL_TERMINATION');
+                stopDialTone();
+
+                // Stop any active ringtone for incoming calls
+                logWithDetails('STOPPING_RINGTONE_ON_CALL_TERMINATION');
+                stopNotifications();
+
+                // Update UI with appropriate status message
+                if (message.byeReceived) {
+                    updateCallStatus('Call ended by remote party');
+                } else if (message.busyReceived) {
+                    updateCallStatus('Call failed: User busy');
+                } else if (message.callCancelled) {
+                    updateCallStatus('Call cancelled by remote party');
+
+                    // Explicitly disable the answer button for cancelled calls
+                    logWithDetails('DISABLING_ANSWER_BUTTON_FOR_CANCELLED_CALL');
+                    elements.answerBtn.disabled = true;
+                } else if (message.userNotRegistered) {
+                    updateCallStatus('Call failed: User not registered');
+
+                    // Log the user not registered event
+                    logWithDetails('USER_NOT_REGISTERED_UI_UPDATE');
+                } else if (message.rejectionReceived) {
+                    // Use the status code and reason phrase if available
+                    const statusCode = message.statusCode || '';
+                    const reasonPhrase = message.reasonPhrase || '';
+                    if (statusCode && reasonPhrase) {
+                        updateCallStatus(`Call failed: ${statusCode} ${reasonPhrase}`);
+                    } else {
+                        updateCallStatus('Call rejected by remote party');
+                    }
+                } else {
+                    updateCallStatus(message.state.callStatus || 'Call ended');
+                }
+
                 updateButtonState(message.state.isConnected, false);
 
                 // Play hangup sound
@@ -129,10 +174,10 @@ function init() {
 
                 // Stop local audio stream if it exists
                 if (elements.localAudio.srcObject) {
-                    logWithDetails('STOPPING_LOCAL_AUDIO_STREAM_ON_BYE');
+                    logWithDetails('STOPPING_LOCAL_AUDIO_STREAM_ON_CALL_END');
                     elements.localAudio.srcObject.getTracks().forEach(track => {
                         track.stop();
-                        logWithDetails('AUDIO_TRACK_STOPPED_ON_BYE', { trackId: track.id });
+                        logWithDetails('AUDIO_TRACK_STOPPED_ON_CALL_END', { trackId: track.id });
                     });
                     elements.localAudio.srcObject = null;
                 }
@@ -235,10 +280,36 @@ function updateCallStatus(message, caller = null) {
 }
 
 // Update button states
-function updateButtonState(connected, hasActiveCall = false) {
-    elements.connectBtn.disabled = connected;
-    elements.disconnectBtn.disabled = !connected;
-    elements.callBtn.disabled = !connected || hasActiveCall;
+function updateButtonState(connected, hasActiveCall = false, status = '') {
+    // Check if the status indicates a registration failure
+    const isRegistrationFailure = status === 'Unregistered' ||
+                                status.includes('Registration failed') ||
+                                status.includes('Connection failed');
+
+    // Log the button state update
+    logWithDetails('UPDATING_BUTTON_STATE', {
+        connected: connected,
+        hasActiveCall: hasActiveCall,
+        status: status,
+        isRegistrationFailure: isRegistrationFailure
+    });
+
+    // If there's a registration failure, enable connect button and disable disconnect button
+    if (isRegistrationFailure) {
+        elements.connectBtn.disabled = false;
+        elements.disconnectBtn.disabled = true;
+        elements.callBtn.disabled = true;
+
+        logWithDetails('REGISTRATION_FAILURE_BUTTON_UPDATE', {
+            connectBtnDisabled: false,
+            disconnectBtnDisabled: true
+        });
+    } else {
+        // Normal button state update based on connection status
+        elements.connectBtn.disabled = connected;
+        elements.disconnectBtn.disabled = !connected;
+        elements.callBtn.disabled = !connected || hasActiveCall;
+    }
 
     if (hasActiveCall) {
         elements.hangupBtn.disabled = false;
@@ -316,14 +387,42 @@ function setupCollapsibleSections() {
 function updateUIFromState(state) {
     logWithDetails('UPDATE_UI_FROM_STATE', state);
 
+    // Check if call status indicates a failure or ended state
+    if (state.callStatus) {
+        const callStatus = state.callStatus.toLowerCase();
+        if (callStatus.includes('failed') ||
+            callStatus.includes('ended') ||
+            callStatus.includes('rejected') ||
+            callStatus.includes('busy') ||
+            callStatus.includes('cancelled') ||
+            callStatus.includes('not registered')) {
+            // Stop any active dialing tone
+            logWithDetails('STOPPING_DIAL_TONE_FROM_UI_UPDATE', { callStatus: state.callStatus });
+            stopDialTone();
+
+            // Also stop any active ringtone for incoming calls
+            logWithDetails('STOPPING_RINGTONE_FROM_UI_UPDATE', { callStatus: state.callStatus });
+            stopNotifications();
+        }
+    }
+
     // Update status
     updateStatus(state.status || 'Disconnected');
     updateCallStatus(state.callStatus || '', state.caller || null);
 
     // Update connection indicator and username display
-    if (state.isConnected) {
+    // Check if the status is 'Unregistered' specifically
+    const isUnregistered = state.status === 'Unregistered';
+
+    if (state.isConnected && !isUnregistered) {
+        // Only show connected (green) if actually registered
         elements.connectionIndicator.classList.remove('disconnected');
         elements.connectionIndicator.classList.add('connected');
+
+        logWithDetails('CONNECTION_INDICATOR_UPDATED', {
+            status: 'connected',
+            registrationStatus: state.status
+        });
 
         // Display username when connected
         chrome.storage.local.get(['sipUsername'], (result) => {
@@ -338,8 +437,16 @@ function updateUIFromState(state) {
             elements.connectionToggle.classList.remove('active');
         }
     } else {
+        // Show disconnected (red) if not connected or unregistered
         elements.connectionIndicator.classList.remove('connected');
         elements.connectionIndicator.classList.add('disconnected');
+
+        logWithDetails('CONNECTION_INDICATOR_UPDATED', {
+            status: 'disconnected',
+            isConnected: state.isConnected,
+            isUnregistered: isUnregistered,
+            registrationStatus: state.status
+        });
 
         // Clear username when disconnected
         elements.usernameDisplay.textContent = '';
@@ -351,8 +458,8 @@ function updateUIFromState(state) {
         }
     }
 
-    // Update button states
-    updateButtonState(state.isConnected, state.hasActiveCall);
+    // Update button states with status information
+    updateButtonState(state.isConnected, state.hasActiveCall, state.status || '');
 
     // Handle incoming calls
     if (state.hasActiveCall && state.callStatus === 'Incoming call...') {
@@ -374,6 +481,12 @@ function updateUIFromState(state) {
                 const caller = result.connectionState && result.connectionState.caller ?
                     result.connectionState.caller : null;
                 updateCallStatus('Incoming call...', caller);
+            }
+        } else {
+            // If there's no incoming call, make sure the answer button is disabled
+            if (state.callStatus !== 'Incoming call...') {
+                logWithDetails('NO_INCOMING_CALL_DISABLING_ANSWER_BUTTON');
+                elements.answerBtn.disabled = true;
             }
         }
     });
@@ -500,13 +613,23 @@ async function makeCall() {
             server
         }, (response) => {
             if (response) {
-                logWithDetails('MAKE_CALL_RESPONSE', { success: response.success });
-                updateUIFromState(response.state);
+                logWithDetails('MAKE_CALL_RESPONSE', {
+                    success: response.success,
+                    state: response.state,
+                    callStatus: response.state ? response.state.callStatus : null
+                });
 
-                // If call failed, stop the dialing tone
-                if (!response.success) {
+                // If call failed or status indicates failure, stop the dialing tone
+                if (!response.success ||
+                    (response.state &&
+                     response.state.callStatus &&
+                     response.state.callStatus.includes('failed'))) {
+                    logWithDetails('STOPPING_DIAL_TONE_ON_CALL_FAILURE');
                     stopDialTone();
                 }
+
+                // Update UI state
+                updateUIFromState(response.state);
             } else {
                 logWithDetails('MAKE_CALL_NO_RESPONSE');
                 stopDialTone();

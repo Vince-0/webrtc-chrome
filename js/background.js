@@ -25,7 +25,11 @@ function handleSessionStateChange(session, newState) {
     newState: newState,
     direction: connectionState.callDirection,
     byeReceived: session.bye ? 'yes' : 'no',
-    terminationReason: session.terminationReason || 'unknown'
+    terminationReason: session.terminationReason || 'unknown',
+    lastResponse: session.lastResponse ? {
+      statusCode: session.lastResponse.statusCode,
+      reasonPhrase: session.lastResponse.reasonPhrase
+    } : 'none'
   });
 
   // Handle terminated state (call ended)
@@ -34,39 +38,176 @@ function handleSessionStateChange(session, newState) {
     const isBye = session.terminationReason === 'BYE' ||
                  (session.request && session.request.method === 'BYE');
 
+    // Check for rejection responses (4xx, 5xx, 6xx)
+    const isRejected = session.lastResponse &&
+                      (session.lastResponse.statusCode >= 400 &&
+                       session.lastResponse.statusCode < 700);
+
+    // Specific check for 486 Busy Here
+    const isBusy = isRejected && session.lastResponse.statusCode === 486;
+
+    // Specific check for 487 Request Terminated (CANCEL)
+    const isCancelled = isRejected && session.lastResponse.statusCode === 487;
+
+    // Specific check for 480 User Not Registered
+    const isNotRegistered = isRejected && session.lastResponse.statusCode === 480;
+
     logWithDetails('CALL_TERMINATED', {
       sessionId: session.id,
       reason: session.endTime ? 'Call ended normally' : 'Call terminated unexpectedly',
       isBye: isBye,
-      terminationReason: session.terminationReason || 'unknown'
+      isRejected: isRejected,
+      isBusy: isBusy,
+      isCancelled: isCancelled,
+      isNotRegistered: isNotRegistered,
+      statusCode: isRejected ? session.lastResponse.statusCode : 'none',
+      reasonPhrase: isRejected ? session.lastResponse.reasonPhrase : 'none',
+      terminationReason: session.terminationReason || 'unknown',
+      callDirection: connectionState.callDirection
     });
 
-    // Update UI with appropriate message
-    let callStatus = 'Call ended';
-    if (isBye && connectionState.callDirection === 'incoming') {
-      callStatus = 'Call ended by remote party';
-    } else if (isBye && connectionState.callDirection === 'outgoing') {
-      callStatus = 'Call ended by remote party';
+    if (isBye) {
+      // Use the centralized BYE packet handler for consistent behavior
+      handleByePacket(session, { method: 'BYE' });
+    } else if (isBusy) {
+      // Handle 486 Busy Here specifically
+      logWithDetails('BUSY_HERE_RECEIVED', {
+        sessionId: session.id,
+        callDirection: connectionState.callDirection
+      });
+
+      // Update UI with busy message
+      updateConnectionState({
+        callStatus: 'Call failed: User busy',
+        hasActiveCall: false,
+        callDirection: null
+      });
+
+      currentCall = null;
+
+      // Clear the incoming call flag
+      chrome.storage.local.set({ hasIncomingCall: false });
+
+      // Notify any open popups about the busy status
+      chrome.runtime.sendMessage({
+        action: 'stateUpdated',
+        state: connectionState,
+        callTerminated: true,
+        busyReceived: true
+      });
+    } else if (isCancelled) {
+      // Handle 487 Request Terminated (CANCEL) specifically
+      logWithDetails('CALL_CANCELLED_RECEIVED', {
+        sessionId: session.id,
+        callDirection: connectionState.callDirection
+      });
+
+      // Update UI with cancelled message
+      updateConnectionState({
+        callStatus: 'Call cancelled by remote party',
+        hasActiveCall: false,
+        callDirection: null
+      });
+
+      currentCall = null;
+
+      // Clear the incoming call flag with extra logging
+      logWithDetails('CLEARING_INCOMING_CALL_FLAG_ON_CANCEL');
+      chrome.storage.local.set({ hasIncomingCall: false }, () => {
+        if (chrome.runtime.lastError) {
+          logWithDetails('ERROR_CLEARING_INCOMING_CALL_FLAG', { error: chrome.runtime.lastError });
+        } else {
+          logWithDetails('INCOMING_CALL_FLAG_CLEARED_SUCCESSFULLY');
+        }
+      });
+
+      // Notify any open popups about the cancellation
+      chrome.runtime.sendMessage({
+        action: 'stateUpdated',
+        state: connectionState,
+        callTerminated: true,
+        callCancelled: true
+      });
+    } else if (isNotRegistered) {
+      // Handle 480 User Not Registered specifically
+      logWithDetails('USER_NOT_REGISTERED_RECEIVED', {
+        sessionId: session.id,
+        callDirection: connectionState.callDirection
+      });
+
+      // Update UI with user not registered message
+      updateConnectionState({
+        callStatus: 'Call failed: User not registered',
+        hasActiveCall: false,
+        callDirection: null
+      });
+
+      currentCall = null;
+
+      // Clear the incoming call flag
+      chrome.storage.local.set({ hasIncomingCall: false });
+
+      // Notify any open popups about the user not registered status
+      chrome.runtime.sendMessage({
+        action: 'stateUpdated',
+        state: connectionState,
+        callTerminated: true,
+        userNotRegistered: true
+      });
+    } else if (isRejected) {
+      // Handle other rejection responses
+      const statusCode = session.lastResponse.statusCode;
+      const reasonPhrase = session.lastResponse.reasonPhrase || 'Unknown reason';
+
+      logWithDetails('CALL_REJECTED', {
+        sessionId: session.id,
+        statusCode: statusCode,
+        reasonPhrase: reasonPhrase,
+        callDirection: connectionState.callDirection
+      });
+
+      // Update UI with rejection message
+      updateConnectionState({
+        callStatus: `Call failed: ${statusCode} ${reasonPhrase}`,
+        hasActiveCall: false,
+        callDirection: null
+      });
+
+      currentCall = null;
+
+      // Clear the incoming call flag
+      chrome.storage.local.set({ hasIncomingCall: false });
+
+      // Notify any open popups about the rejection
+      chrome.runtime.sendMessage({
+        action: 'stateUpdated',
+        state: connectionState,
+        callTerminated: true,
+        rejectionReceived: true,
+        statusCode: statusCode,
+        reasonPhrase: reasonPhrase
+      });
+    } else {
+      // For other non-BYE terminations, use a generic message
+      updateConnectionState({
+        callStatus: 'Call ended',
+        hasActiveCall: false,
+        callDirection: null
+      });
+
+      currentCall = null;
+
+      // Clear the incoming call flag
+      chrome.storage.local.set({ hasIncomingCall: false });
+
+      // Notify any open popups about the state change immediately
+      chrome.runtime.sendMessage({
+        action: 'stateUpdated',
+        state: connectionState,
+        callTerminated: true,
+        byeReceived: false
+      });
     }
-
-    updateConnectionState({
-      callStatus: callStatus,
-      hasActiveCall: false,
-      callDirection: null
-    });
-
-    currentCall = null;
-
-    // Clear the incoming call flag
-    chrome.storage.local.set({ hasIncomingCall: false });
-
-    // Notify any open popups about the state change immediately
-    chrome.runtime.sendMessage({
-      action: 'stateUpdated',
-      state: connectionState,
-      callTerminated: true,
-      byeReceived: isBye
-    });
   }
 }
 
@@ -79,7 +220,7 @@ function openPhoneWindow() {
   // Check if window already exists
   if (phoneWindow && !chrome.runtime.lastError) {
     // Focus the existing window
-    chrome.windows.update(phoneWindowId, { focused: true }, (window) => {
+    chrome.windows.update(phoneWindowId, { focused: true }, (_) => {
       if (chrome.runtime.lastError) {
         // Window doesn't exist anymore, create a new one
         createNewPhoneWindow();
@@ -196,6 +337,59 @@ function logWithDetails(action, details = {}) {
   } else {
     console.log(logMessage);
   }
+}
+
+// Centralized function to handle BYE packets
+function handleByePacket(session, bye) {
+  logWithDetails('HANDLE_BYE_PACKET', {
+    sessionId: session ? session.id : 'unknown',
+    sessionExists: !!session,
+    sessionState: session ? session.state : 'unknown',
+    byeExists: !!bye,
+    byeMethod: bye ? bye.method : 'unknown',
+    callDirection: connectionState.callDirection,
+    hasActiveCall: connectionState.hasActiveCall,
+    currentCallExists: !!currentCall,
+    currentCallMatchesSession: currentCall === session
+  });
+
+  // Update UI immediately with consistent message
+  updateConnectionState({
+    callStatus: 'Call ended by remote party',
+    hasActiveCall: false,
+    callDirection: null
+  });
+
+  // Clear the current call reference
+  if (currentCall === session) {
+    logWithDetails('CLEARING_CURRENT_CALL_REFERENCE', { sessionId: session ? session.id : 'unknown' });
+    currentCall = null;
+  } else if (currentCall) {
+    logWithDetails('CURRENT_CALL_MISMATCH', {
+      currentCallId: currentCall.id,
+      byeSessionId: session ? session.id : 'unknown'
+    });
+    // Still clear it to be safe
+    currentCall = null;
+  }
+
+  // Clear the incoming call flag
+  chrome.storage.local.set({ hasIncomingCall: false });
+  logWithDetails('CLEARED_INCOMING_CALL_FLAG_ON_BYE');
+
+  // Notify any open popups about the BYE packet
+  chrome.runtime.sendMessage({
+    action: 'stateUpdated',
+    state: connectionState,
+    callTerminated: true,
+    byeReceived: true
+  });
+
+  logWithDetails('BYE_PACKET_HANDLED', {
+    callDirection: connectionState.callDirection,
+    callStatus: connectionState.callStatus,
+    hasActiveCall: connectionState.hasActiveCall
+  });
 }
 
 // Connect to SIP server
@@ -324,38 +518,32 @@ async function connect(server, wsServerUrl, username, password, displayName) {
 
           // Add specific BYE request listener if available
           if (session.delegate && typeof session.delegate.onBye === 'function') {
-            const originalOnBye = session.delegate.onBye;
-            session.delegate.onBye = (bye) => {
-              logWithDetails('BYE_RECEIVED_DIRECTLY', {
-                sessionId: session.id,
-                byeExists: !!bye
-              });
+            // Only override if not already done
+            if (!session._byeHandlerAdded) {
+              const originalOnBye = session.delegate.onBye;
+              session.delegate.onBye = (bye) => {
+                logWithDetails('BYE_RECEIVED_DIRECTLY', {
+                  sessionId: session.id,
+                  byeExists: !!bye,
+                  callDirection: 'incoming', // Explicitly log that this is for an incoming call
+                  sessionState: session.state
+                });
 
-              // Update UI immediately
-              updateConnectionState({
-                callStatus: 'Call ended by remote party',
-                hasActiveCall: false,
-                callDirection: null
-              });
+                // Use the centralized BYE packet handler
+                handleByePacket(session, bye);
 
-              currentCall = null;
-
-              // Clear the incoming call flag
-              chrome.storage.local.set({ hasIncomingCall: false });
-
-              // Notify any open popups about the state change immediately with callTerminated flag
-              chrome.runtime.sendMessage({
-                action: 'stateUpdated',
-                state: connectionState,
-                callTerminated: true,
-                byeReceived: true
-              });
-
-              // Call original handler if it exists
-              if (originalOnBye) {
-                originalOnBye(bye);
-              }
-            };
+                // Call original handler if it exists
+                if (originalOnBye) {
+                  originalOnBye(bye);
+                }
+              };
+              session._byeHandlerAdded = true;
+              logWithDetails('BYE_HANDLER_ADDED_FOR_INCOMING', { sessionId: session.id });
+            } else {
+              logWithDetails('BYE_HANDLER_ALREADY_EXISTS_FOR_INCOMING', { sessionId: session.id });
+            }
+          } else {
+            logWithDetails('NO_BYE_HANDLER_AVAILABLE_FOR_INCOMING', { sessionId: session.id });
           }
         }
 
@@ -374,6 +562,25 @@ async function connect(server, wsServerUrl, username, password, displayName) {
           callStatus: 'Call connected',
           hasActiveCall: true
         });
+
+        // After a call is answered, make sure we have the correct session reference
+        if (simpleUser._session) {
+          logWithDetails('UPDATING_CURRENT_CALL_REFERENCE_AFTER_ANSWER', {
+            sessionId: simpleUser._session.id,
+            sessionState: simpleUser._session.state
+          });
+
+          // Update the current call reference
+          currentCall = simpleUser._session;
+
+          // Make sure we have state change listeners attached
+          if (!simpleUser._session._stateChangeListenerAdded) {
+            simpleUser._session.stateChange.addListener((newState) => {
+              handleSessionStateChange(simpleUser._session, newState);
+            });
+            simpleUser._session._stateChangeListenerAdded = true;
+          }
+        }
       },
       onCallHangup: () => {
         logWithDetails('DELEGATE_CALL_HANGUP');
@@ -597,12 +804,67 @@ async function makeCall(target, server) {
     // Add event listeners to the session to handle remote termination
     if (simpleUser._session) {
       const session = simpleUser._session;
-      logWithDetails('ADDING_STATE_CHANGE_LISTENER_TO_OUTGOING_CALL', { sessionId: session.id });
+      logWithDetails('ADDING_STATE_CHANGE_LISTENER_TO_OUTGOING_CALL', {
+        sessionId: session.id,
+        sessionState: session.state
+      });
 
       // Listen for state changes in the session using our global handler
-      session.stateChange.addListener((newState) => {
-        handleSessionStateChange(session, newState);
-      });
+      if (!session._stateChangeListenerAdded) {
+        session.stateChange.addListener((newState) => {
+          handleSessionStateChange(session, newState);
+        });
+        session._stateChangeListenerAdded = true;
+        logWithDetails('STATE_CHANGE_LISTENER_ADDED_FOR_OUTGOING', { sessionId: session.id });
+      }
+
+      // Add specific BYE request listener for outgoing calls
+      if (session.delegate && typeof session.delegate.onBye === 'function') {
+        // Only override if not already done
+        if (!session._byeHandlerAdded) {
+          const originalOnBye = session.delegate.onBye;
+          session.delegate.onBye = (bye) => {
+            logWithDetails('BYE_RECEIVED_FOR_OUTGOING_CALL', {
+              sessionId: session.id,
+              byeExists: !!bye,
+              callDirection: 'outgoing', // Explicitly log that this is for an outgoing call
+              sessionState: session.state
+            });
+
+            // Use the centralized BYE packet handler
+            handleByePacket(session, bye);
+
+            // Call original handler if it exists
+            if (originalOnBye) {
+              originalOnBye(bye);
+            }
+          };
+          session._byeHandlerAdded = true;
+          logWithDetails('BYE_HANDLER_ADDED_FOR_OUTGOING', { sessionId: session.id });
+        } else {
+          logWithDetails('BYE_HANDLER_ALREADY_EXISTS_FOR_OUTGOING', { sessionId: session.id });
+        }
+      } else {
+        logWithDetails('NO_BYE_HANDLER_AVAILABLE_FOR_OUTGOING', { sessionId: session.id });
+      }
+
+      // Add response event listener to catch SIP responses like 486 Busy Here
+      if (typeof session.delegate.onCallHangup !== 'function') {
+        session.delegate.onCallHangup = () => {
+          logWithDetails('DELEGATE_CALL_HANGUP_FOR_OUTGOING', {
+            sessionId: session.id,
+            sessionState: session.state,
+            lastResponse: session.lastResponse ? {
+              statusCode: session.lastResponse.statusCode,
+              reasonPhrase: session.lastResponse.reasonPhrase
+            } : 'none'
+          });
+
+          // The session state change handler will take care of updating the UI
+          // based on the lastResponse property
+        };
+        logWithDetails('HANGUP_HANDLER_ADDED_FOR_OUTGOING', { sessionId: session.id });
+      }
 
       // Store the current call reference
       currentCall = session;
@@ -678,30 +940,32 @@ async function answer() {
 
       // Add specific BYE request listener if available
       if (session.delegate && typeof session.delegate.onBye === 'function') {
-        const originalOnBye = session.delegate.onBye;
-        session.delegate.onBye = (bye) => {
-          logWithDetails('BYE_RECEIVED_AFTER_ANSWER', {
-            sessionId: session.id,
-            byeExists: !!bye
-          });
+        // Only override if not already done
+        if (!session._byeHandlerAdded) {
+          const originalOnBye = session.delegate.onBye;
+          session.delegate.onBye = (bye) => {
+            logWithDetails('BYE_RECEIVED_AFTER_ANSWER', {
+              sessionId: session.id,
+              byeExists: !!bye,
+              callDirection: 'incoming', // Explicitly log that this is for an answered incoming call
+              sessionState: session.state
+            });
 
-          // Update UI immediately
-          updateConnectionState({
-            callStatus: 'Call ended by remote party',
-            hasActiveCall: false,
-            callDirection: null
-          });
+            // Use the centralized BYE packet handler
+            handleByePacket(session, bye);
 
-          currentCall = null;
-
-          // Clear the incoming call flag
-          chrome.storage.local.set({ hasIncomingCall: false });
-
-          // Call original handler if it exists
-          if (originalOnBye) {
-            originalOnBye(bye);
-          }
-        };
+            // Call original handler if it exists
+            if (originalOnBye) {
+              originalOnBye(bye);
+            }
+          };
+          session._byeHandlerAdded = true;
+          logWithDetails('BYE_HANDLER_ADDED_AFTER_ANSWER', { sessionId: session.id });
+        } else {
+          logWithDetails('BYE_HANDLER_ALREADY_EXISTS', { sessionId: session.id });
+        }
+      } else {
+        logWithDetails('NO_BYE_HANDLER_AVAILABLE', { sessionId: session.id });
       }
 
       // Make sure we have the current call reference
@@ -1023,6 +1287,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           state: connectionState,
           hangupError: true,
           errorMessage: error.message
+        });
+      });
+      return true;
+
+    case 'transfer':
+      // Transfer the current call
+      transferCall(message.target).then(() => {
+        sendResponse({
+          success: true,
+          state: connectionState,
+          message: 'Call transferred successfully'
+        });
+      }).catch(error => {
+        sendResponse({
+          success: false,
+          error: error.message,
+          state: connectionState,
+          message: error.message
         });
       });
       return true;
