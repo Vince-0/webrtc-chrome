@@ -2549,6 +2549,171 @@ Total user chat messages: 104
 Total user agent requests: 1
 Total user agent tool uses: 432
 
+## CHECKPOINT: 116
+
+### User
+Is there any difference in the logic or functions that might cause the remote side to not hangup between these two scenarios:  1:Hangup during and outbound call ringing and 2: hangup during an answered call? Investigate only and advise
+
+### Assistant
+I'll investigate the differences in hangup logic between outbound call ringing and answered call scenarios by examining the code in the background.js file.
+
+[Analyzed the code and identified key differences]
+
+Based on my analysis of the code, I've identified key differences in how hangup is handled between outbound call ringing and answered call scenarios:
+
+### Key Differences:
+
+1. **Different SIP Methods Used Based on Session State**:
+   - For outbound calls during ringing (session state is 'Establishing'), the code uses `session.cancel()`
+   - For established calls (after answer), the code uses `session.bye()`
+
+2. **Dialog Establishment**:
+   - During ringing, a full SIP dialog may not be established yet
+   - After a call is answered, a complete SIP dialog is established with proper dialog parameters (callId, fromTag, toTag)
+
+3. **Session State Tracking**:
+   - The `onCallAnswered` handler sets up additional handlers specifically for answered calls
+   - Different event handlers are registered for outbound calls after they're answered vs. during ringing
+
+4. **BYE Handler Registration**:
+   - For answered calls, a specific BYE handler is added in the `onCallAnswered` function
+   - This handler might not be fully set up during the ringing phase
+
+### Potential Issues:
+
+1. **Dialog Reference Issue**:
+   When a call is answered, the SIP dialog is fully established, but there might be issues with how the dialog reference is maintained or accessed when trying to hang up. The dialog contains critical parameters needed for the BYE request to be properly formatted.
+
+2. **Session State Transition**:
+   The transition from 'Establishing' to 'Established' state might not be properly handled in all cases, especially for outbound calls. This could lead to using the wrong method (BYE vs CANCEL) in certain edge cases.
+
+3. **Event Handler Registration Timing**:
+   The BYE handlers are registered at different points in the call flow, and there might be race conditions or timing issues where the proper handler isn't registered when needed.
+
+4. **SIP.js Library Internal State**:
+   The SIP.js library maintains internal state about the call, and if this state becomes inconsistent, it might not properly send BYE requests even when instructed to do so.
+
+### Recommendation:
+
+Based on this analysis, I would recommend:
+
+1. **Add Detailed Logging**:
+   Add more detailed logging around the session state, dialog parameters, and BYE request creation specifically for outbound calls after they're answered. This would help identify exactly where the issue occurs.
+
+2. **Ensure Dialog Parameters**:
+   Verify that all necessary dialog parameters (callId, fromTag, toTag) are properly set and accessible when trying to hang up an answered outbound call.
+
+3. **Consistent Handler Registration**:
+   Ensure that the BYE and hangup handlers are consistently registered for both outbound and inbound calls, and at all stages of the call (ringing, answered).
+
+4. **Session Reference Maintenance**:
+   Improve how the session reference is maintained throughout the call lifecycle, especially after a call is answered, to ensure it's always available for hangup operations.
+
+The key insight is that there's a fundamental difference in how SIP handles terminating a call during ringing (CANCEL) versus after it's established (BYE), and the code needs to properly handle both scenarios with the correct SIP methods and parameters.
+
+### User
+Proceed with only recommendations 2 , 3 , 4
+
+## Statistics
+Total user chat messages: 106
+Total user agent requests: 1
+Total user agent tool uses: 438
+
+## CHECKPOINT: 117
+
+### User
+that was checkpoing 116 not 114
+
+### Assistant
+I'll update the augment-tasklist and augment-chathistory files to correct the checkpoint number from 114 to 116.
+
+## Statistics
+Total user chat messages: 108
+Total user agent requests: 1
+Total user agent tool uses: 441
+
+## CHECKPOINT: 118
+
+### User
+I have readded a pending task, investigate how the scenarios are handled differently and could cause the inbound call remote side hangup to not work. Advise only do not make changes and ask any questions that could elaborate and clarify the problem
+
+### Assistant
+I'll investigate the differences in how inbound call remote side hangup is handled compared to outbound call remote side hangup.
+
+[Analyzed the code and identified key differences]
+
+Based on my investigation of the code, I've identified several key differences in how inbound call remote hangup is handled compared to outbound call remote hangup:
+
+1. **Different Message Properties in UI Updates**:
+   - For outbound calls, the `remoteHangup` flag is not consistently set in the message sent to the UI when the remote side hangs up
+   - For inbound calls, the `remoteHangup` flag is explicitly set to `true` in the message
+   - This affects how the UI displays the call status ("Call ended" vs. "Call ended by remote party")
+
+2. **Different Event Handler Registration**:
+   - For inbound calls, the `onCallHangup` handler is registered in two places:
+     - During initial call reception
+     - After the call is answered
+   - For outbound calls, the handler is only registered after the call is answered
+   - This creates potential inconsistency in how hangup events are processed
+
+3. **Different BYE Packet Handling**:
+   - The centralized `handleByePacket` function is called for both inbound and outbound calls
+   - However, for inbound calls, there's an additional explicit call to update the UI with "Call ended by remote party"
+   - For outbound calls after answer, the message just says "Call ended"
+
+4. **UI Tab Switching Behavior**:
+   - When a remote hangup occurs for an inbound call, there's explicit code to switch to the Phone tab
+   - This explicit tab switching might be missing or inconsistent for outbound calls
+
+5. **Message Broadcasting Differences**:
+   - For inbound calls, the `remoteHangup: true` flag is included in the message
+   - This flag affects how the UI processes the hangup event
+   - If this flag is missing for outbound calls, the UI won't show "Call ended by remote party"
+
+### Questions to Help Clarify the Issue:
+
+1. When the remote side hangs up an inbound call, do you see any SIP BYE packets in the logs? This would help determine if the issue is with receiving the BYE packet or processing it.
+
+2. Does the Phone tab UI update at all when the remote side hangs up an inbound call, or does it remain showing "Call connected"?
+
+3. Is there any difference in behavior if you manually switch to the Phone tab before the remote side hangs up?
+
+4. Do you see any error messages in the console when the remote side hangs up an inbound call?
+
+5. Does the issue occur consistently with all inbound calls, or only in specific scenarios (e.g., after a certain duration)?
+
+### Potential Solutions:
+
+1. **Ensure Consistent Event Handler Registration**:
+   - Make sure the `onCallHangup` handler is consistently registered for both inbound and outbound calls
+   - Ensure the handler includes the `remoteHangup: true` flag for both call directions
+
+2. **Improve BYE Packet Handling**:
+   - Enhance the centralized `handleByePacket` function to handle both inbound and outbound calls consistently
+   - Ensure it always sends the appropriate UI update messages with the correct flags
+
+3. **Standardize UI Update Messages**:
+   - Use a consistent format for messages sent to the UI for both inbound and outbound calls
+   - Always include the `remoteHangup` flag when appropriate
+
+4. **Add Detailed Logging**:
+   - Add more detailed logging around BYE packet reception and processing for inbound calls
+   - This would help identify exactly where the issue occurs
+
+5. **Improve Tab Switching Logic**:
+   - Ensure the Phone tab is always shown when a call ends, regardless of call direction
+   - This would make the UI behavior more consistent
+
+The key insight is that there are subtle differences in how inbound and outbound call hangups are handled, particularly in the message flags and UI update logic. Addressing these inconsistencies would likely resolve the issue.
+
+### User
+1 I see SIP BYE in the server log. 2 Remains call connected. 3 No the phone tab is the active tab on inbound call ring. 4 No errors. 5 All calls. Proceed with all potential solutions
+
+## Statistics
+Total user chat messages: 110
+Total user agent requests: 1
+Total user agent tool uses: 446
+
 ## CHECKPOINT: 107
 
 ### User

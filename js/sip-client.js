@@ -86,14 +86,7 @@ function updateButtonState(connected) {
 
 // Create a proper SIP URI
 function createSipUri(username, domain) {
-    // Create a temporary UserAgent to use makeURI
-    const tempUA = new SIP.UserAgent({
-        uri: SIP.UserAgent.makeURI(`sip:${username}@${domain}`),
-        transportOptions: {
-            server: `wss://${domain}:7443/ws`
-        }
-    });
-
+    // No need to create a temporary UserAgent, just use the static method
     const uri = SIP.UserAgent.makeURI(`sip:${username}@${domain}`);
     if (!uri) {
         throw new Error(`Failed to create URI for ${username}@${domain}`);
@@ -169,7 +162,9 @@ async function connect() {
         userAgent = new SIP.UserAgent({
             uri: SIP.UserAgent.makeURI(`sip:${username}@${server}`),
             transportOptions: {
-                server: wsServerUrl
+                server: wsServerUrl,
+                // Use the actual SIP server domain for Via header instead of .invalid
+                viaHost: server
             }
         });
 
@@ -187,7 +182,9 @@ async function connect() {
                 uri: SIP.UserAgent.makeURI(`sip:${username}@${server}`),
                 transportOptions: {
                     server: wsServerUrl,
-                    traceSip: true
+                    traceSip: true,
+                    // Use the actual SIP server domain for Via header instead of .invalid
+                    viaHost: server
                 },
                 sessionDescriptionHandlerFactoryOptions: {
                     peerConnectionConfiguration: {

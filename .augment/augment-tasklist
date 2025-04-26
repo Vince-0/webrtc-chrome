@@ -67,13 +67,9 @@ UX: On outbound call, after pressing hangup, the hangup button remains active wi
 
 #STATUS:NEW:
 
-UX: On outbound call, once the remote side answers, I press hangup but the phone hangup does not reach the remote side to end the call. The BYE packet does not get sent and is not seen by the connecting SIP server. This is not the case with an inbound call where if I press hangup the remote side gets it and ends the call on their side. This is also not the case while the call is ringing, whereby if I press hangup the remote side gets it and ends the call on their side.CHECKPOINT:105,106,107,111
-
-UX: On inbound call, when the remote side hangs up, the phone tab UI does not update with the appropriate call ended status. On outbound call, when the remote side hangs up, the phone tab UI does correctly update with the call ended status. Investigate how these two scenarios are different and fix the inbound call hangup:CHECKPOINT:102,103,105
-
-
-
 UX: In the settings tab, move the display name field under the password field. Retain the auto-fill function.
+
+UX: Add settings input boxes for the STUN servers that are present in the peerConnectionConfiguration. Autofill with stun:stun.l.google.com:19302. 
 
 UX: Add icons for the required sizes.
 
@@ -97,6 +93,7 @@ INFRA: SessionDescriptionHandler.getDescription failed - Error: Media devices no
 INFRA: TypeError: this._peerConnection.getReceivers is not a function:CHECKPOINT:54
 BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
 
+
 INFRA: Console logging can be removed and all code that uses it can be removed.
 
 INFRA: Make state stored data properly secured because it includes user name, password and server information.
@@ -107,3 +104,9 @@ INFRA: Investigate any potential performance improvements.
 INFRA: Investigate for any potential security improvements.
 INFRA: Add automated tests for the extension functionality.
 INFRA: Package the extension for distribution
+
+
+#STATUS: PARKED
+INFRA: On inbound call, when the remote side hangs up, the phone tab UI does not update with the appropriate call ended status. On outbound call, when the remote side hangs up, the phone tab UI does correctly update with the call ended status. Investigate how these two scenarios are different and fix the inbound call hangup:CHECKPOINT:102,103,105,118
+
+INFRA: On outbound call, once the remote side answers, I press hangup but the phone hangup does not reach the remote side to end the call. The BYE packet does not get sent and is not seen by the connecting SIP server. This is not the case with an inbound call where if I press hangup the remote side gets it and ends the call on their side. This is also not the case while the call is ringing, whereby if I press hangup the remote side gets it and ends the call on their side.CHECKPOINT:105,106,107,111,116,121

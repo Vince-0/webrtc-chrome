@@ -233,13 +233,15 @@ function init() {
 
         if (message.action === 'stateUpdated') {
             // Handle call termination specially
-            if (message.callTerminated) {
+            if (message.callTerminated || message.forceUIUpdate) {
                 logWithDetails('CALL_TERMINATION_NOTIFICATION', {
                     byeReceived: message.byeReceived,
                     busyReceived: message.busyReceived,
                     callCancelled: message.callCancelled,
                     userNotRegistered: message.userNotRegistered,
                     rejectionReceived: message.rejectionReceived,
+                    remoteHangup: message.remoteHangup,
+                    forceUIUpdate: message.forceUIUpdate,
                     state: message.state,
                     callStatus: message.state.callStatus
                 });
@@ -254,8 +256,13 @@ function init() {
                 stopNotifications();
 
                 // Update UI with appropriate status message
-                if (message.byeReceived) {
+                if (message.remoteHangup || message.byeReceived) {
+                    // Ensure we always show "Call ended by remote party" for remote hangups
                     updateCallStatus('Call ended by remote party');
+
+                    // Force switch to Phone tab for remote hangups
+                    logWithDetails('FORCING_SWITCH_TO_PHONE_TAB_FOR_REMOTE_HANGUP');
+                    switchToTab('phone');
                 } else if (message.busyReceived) {
                     updateCallStatus('Call failed: User busy');
                 } else if (message.callCancelled) {
@@ -282,6 +289,8 @@ function init() {
                     updateCallStatus(message.state.callStatus || 'Call ended');
                 }
 
+                // Always ensure hangup button is disabled for terminated calls
+                elements.hangupBtn.disabled = true;
                 updateButtonState(message.state.isConnected, false);
 
                 // Play hangup sound

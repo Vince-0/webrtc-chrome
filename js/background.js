@@ -353,6 +353,9 @@ function handleByePacket(session, bye) {
     currentCallMatchesSession: currentCall === session
   });
 
+  // Store a copy of the session before clearing references
+  const sessionCopy = session;
+
   // Update UI immediately with consistent message
   updateConnectionState({
     callStatus: 'Call ended by remote party',
@@ -377,7 +380,7 @@ function handleByePacket(session, bye) {
   chrome.storage.local.set({ hasIncomingCall: false });
   logWithDetails('CLEARED_INCOMING_CALL_FLAG_ON_BYE');
 
-  // Notify any open popups about the BYE packet
+  // Notify any open popups about the BYE packet - ensure remoteHangup flag is set
   chrome.runtime.sendMessage({
     action: 'callHangup',
     state: connectionState,
@@ -386,12 +389,14 @@ function handleByePacket(session, bye) {
     remoteHangup: true
   });
 
-  // Also send a standard state update for backward compatibility
+  // Also send a standard state update with explicit flags for remote hangup
   chrome.runtime.sendMessage({
     action: 'stateUpdated',
     state: connectionState,
     callTerminated: true,
-    byeReceived: true
+    byeReceived: true,
+    remoteHangup: true,
+    forceUIUpdate: true
   });
 
   // Try to open the phone window to show the call ended status
@@ -401,6 +406,19 @@ function handleByePacket(session, bye) {
   } catch (error) {
     logWithDetails('ERROR_OPENING_PHONE_WINDOW', { error });
   }
+
+  // Force a UI refresh after a short delay to ensure the UI is updated
+  setTimeout(() => {
+    chrome.runtime.sendMessage({
+      action: 'stateUpdated',
+      state: connectionState,
+      callTerminated: true,
+      byeReceived: true,
+      remoteHangup: true,
+      forceUIUpdate: true
+    });
+    logWithDetails('SENT_DELAYED_UI_UPDATE_FOR_BYE');
+  }, 500);
 
   logWithDetails('BYE_PACKET_HANDLED', {
     callDirection: connectionState.callDirection,
@@ -424,7 +442,9 @@ async function connect(server, wsServerUrl, username, password, displayName) {
     userAgent = new SIP.UserAgent({
       uri: SIP.UserAgent.makeURI(`sip:${username}@${server}`),
       transportOptions: {
-        server: wsServerUrl
+        server: wsServerUrl,
+        // Use the actual SIP server domain for Via header instead of .invalid
+        viaHost: server
       }
     });
 
@@ -466,7 +486,9 @@ async function connect(server, wsServerUrl, username, password, displayName) {
         uri: SIP.UserAgent.makeURI(`sip:${username}@${server}`),
         transportOptions: {
           server: wsServerUrl,
-          traceSip: true
+          traceSip: true,
+          // Use the actual SIP server domain for Via header instead of .invalid
+          viaHost: server
         },
         sessionDescriptionHandlerFactoryOptions: {
           peerConnectionConfiguration: {
@@ -691,13 +713,34 @@ async function connect(server, wsServerUrl, username, password, displayName) {
         // After a call is answered, make sure we have the correct session reference
         if (simpleUser._session) {
           const session = simpleUser._session;
+
+          // Verify and log all dialog parameters to ensure they're properly set
+          const dialogParams = session.dialog ? {
+            id: session.dialog.id,
+            callId: session.dialog.callId,
+            localTag: session.dialog.localTag,
+            remoteTag: session.dialog.remoteTag,
+            dialogState: session.dialog.state
+          } : 'no dialog';
+
           logWithDetails('UPDATING_CURRENT_CALL_REFERENCE_AFTER_ANSWER', {
             sessionId: session.id,
             sessionState: session.state,
-            dialog: !!session.dialog,
+            dialog: dialogParams,
             userAgent: !!session.userAgent,
-            remoteTarget: session.remoteTarget ? session.remoteTarget.toString() : 'none'
+            remoteTarget: session.remoteTarget ? session.remoteTarget.toString() : 'none',
+            callDirection: connectionState.callDirection
           });
+
+          // Store critical dialog parameters in a more accessible location
+          if (session.dialog) {
+            session._dialogParams = {
+              callId: session.dialog.callId,
+              localTag: session.dialog.localTag,
+              remoteTag: session.dialog.remoteTag
+            };
+            logWithDetails('DIALOG_PARAMETERS_STORED', session._dialogParams);
+          }
 
           // Update the current call reference
           currentCall = session;
@@ -712,15 +755,17 @@ async function connect(server, wsServerUrl, username, password, displayName) {
           }
 
           // Add specific BYE request listener for outgoing calls after they're answered
-          if (session.delegate && typeof session.delegate.onBye === 'function') {
-            // Always override the BYE handler to ensure it works properly
+          // Always ensure the BYE handler is set up properly
+          if (session.delegate) {
             const originalOnBye = session.delegate.onBye;
             session.delegate.onBye = (bye) => {
               logWithDetails('BYE_RECEIVED_FOR_OUTGOING_CALL_AFTER_ANSWER', {
                 sessionId: session.id,
                 byeExists: !!bye,
                 callDirection: 'outgoing',
-                sessionState: session.state
+                sessionState: session.state,
+                dialogExists: !!session.dialog,
+                dialogParams: session._dialogParams || 'none'
               });
 
               // Use the centralized BYE packet handler
@@ -732,7 +777,10 @@ async function connect(server, wsServerUrl, username, password, displayName) {
               }
             };
             session._byeHandlerAdded = true;
-            logWithDetails('BYE_HANDLER_ADDED_FOR_OUTGOING_AFTER_ANSWER', { sessionId: session.id });
+            logWithDetails('BYE_HANDLER_ADDED_FOR_OUTGOING_AFTER_ANSWER', {
+              sessionId: session.id,
+              sessionState: session.state
+            });
           }
 
           // Add specific onCallHangup handler for outgoing calls after they're answered
@@ -743,7 +791,10 @@ async function connect(server, wsServerUrl, username, password, displayName) {
               lastResponse: session.lastResponse ? {
                 statusCode: session.lastResponse.statusCode,
                 reasonPhrase: session.lastResponse.reasonPhrase
-              } : 'none'
+              } : 'none',
+              dialogExists: !!session.dialog,
+              dialogParams: session._dialogParams || 'none',
+              remoteTarget: session.remoteTarget ? session.remoteTarget.toString() : 'none'
             });
 
             // Update connection state
@@ -752,6 +803,9 @@ async function connect(server, wsServerUrl, username, password, displayName) {
               hasActiveCall: false,
               callDirection: null
             });
+
+            // Store the session reference before clearing it
+            const sessionCopy = session;
 
             // Clear the current call reference
             currentCall = null;
@@ -772,7 +826,11 @@ async function connect(server, wsServerUrl, username, password, displayName) {
               logWithDetails('ERROR_OPENING_PHONE_WINDOW', { error });
             }
           };
-          logWithDetails('HANGUP_HANDLER_ADDED_FOR_OUTGOING_AFTER_ANSWER', { sessionId: session.id });
+          logWithDetails('HANGUP_HANDLER_ADDED_FOR_OUTGOING_AFTER_ANSWER', {
+            sessionId: session.id,
+            sessionState: session.state,
+            dialogExists: !!session.dialog
+          });
         }
       },
       onCallHangup: () => {
@@ -1372,17 +1430,29 @@ async function hangup() {
           // Common session states: 'Established', 'Establishing', 'Terminated'
           if (session.state === 'Established' ||
               (typeof SIP !== 'undefined' && SIP.SessionState && session.state === SIP.SessionState.Established)) {
+
+            // Check for stored dialog parameters
+            const hasDialogParams = !!session._dialogParams;
+            const hasDialog = !!session.dialog;
+
             logWithDetails('USING_BYE_METHOD', {
               state: session.state,
               callDirection: connectionState.callDirection,
-              sessionId: session.id
+              sessionId: session.id,
+              hasDialog: hasDialog,
+              hasDialogParams: hasDialogParams,
+              dialogParams: session._dialogParams || 'none'
             });
 
             // Use the standard bye method for both inbound and outbound calls
             logWithDetails('USING_STANDARD_BYE_METHOD', {
               sessionId: session.id,
-              callDirection: connectionState.callDirection
+              callDirection: connectionState.callDirection,
+              remoteTarget: session.remoteTarget ? session.remoteTarget.toString() : 'none'
             });
+
+            // Make a local copy of the session to ensure it's not lost
+            const sessionCopy = session;
 
             // Call the standard bye method
             await session.bye();
