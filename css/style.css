@@ -35,7 +35,6 @@ h1 {
 h2 {
     margin-bottom: 8px;
     color: #3498db;
-    border-bottom: 1px solid #eee;
     padding-bottom: 3px;
     font-size: 0.8em;
     text-align: center;
@@ -359,8 +358,6 @@ button:disabled {
 .call-log-entries {
     max-height: 200px;
     overflow-y: auto;
-    border: 1px solid #eee;
-    border-radius: 4px;
     padding: 5px;
     margin-top: 5px;
 }
@@ -369,4 +366,150 @@ button:disabled {
     text-align: center;
     color: #999;
     padding: 20px 0;
+}
+
+.call-entry {
+    padding: 6px 8px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    border-left: 3px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.call-entry.incoming {
+    border-left-color: #3498db;
+}
+
+.call-entry.outgoing {
+    border-left-color: #2ecc71;
+}
+
+.call-entry.missed.outgoing {
+    border-left-color: #e74c3c;
+}
+
+.call-entry.missed.incoming {
+    border-left-color: #3498db;
+}
+
+.call-entry.rejected, .call-entry.busy, .call-entry.failed {
+    border-left-color: #e67e22;
+}
+
+.call-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.call-timestamp {
+    font-size: 0.8em;
+    color: #666;
+}
+
+.call-direction-number {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: bold;
+}
+
+.call-direction-icon {
+    font-size: 1.1em;
+    color: #3498db;
+    margin-right: 2px;
+}
+
+.call-direction-label {
+    font-size: 0.8em;
+    padding: 2px 5px;
+    border-radius: 3px;
+    background-color: #e8f4fc;
+    color: #3498db;
+    margin-right: 5px;
+}
+
+.call-entry.outgoing .call-direction-icon {
+    color: #2ecc71;
+}
+
+.call-entry.outgoing .call-direction-label {
+    background-color: #e8f8f5;
+    color: #2ecc71;
+}
+
+/* Change missed incoming calls to blue instead of red */
+.call-entry.incoming.missed .call-direction-icon {
+    color: #3498db;
+}
+
+/* Keep outgoing missed calls as red */
+.call-entry.outgoing.missed .call-direction-icon,
+.call-entry.rejected .call-direction-icon,
+.call-entry.busy .call-direction-icon,
+.call-entry.failed .call-direction-icon,
+.call-entry.cancelled .call-direction-icon,
+.call-entry.no-answer .call-direction-icon,
+.call-entry.unavailable .call-direction-icon {
+    color: #e74c3c;
+}
+
+.call-number-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.call-button {
+    cursor: pointer;
+    color: #3498db;
+    font-size: 1.2em;
+    margin-left: 5px;
+    padding: 0 5px;
+    transition: all 0.2s ease;
+}
+
+.call-button:hover {
+    color: #2980b9;
+    transform: scale(1.2);
+}
+
+.call-status {
+    font-size: 0.8em;
+    padding: 2px 5px;
+    border-radius: 3px;
+    background-color: #eee;
+}
+
+.call-entry.completed .call-status {
+    background-color: #d5f5e3;
+    color: #27ae60;
+}
+
+/* Change missed incoming calls to blue instead of red */
+.call-entry.incoming.missed .call-status {
+    background-color: #e8f4fc;
+    color: #3498db;
+}
+
+/* Keep outgoing missed calls as red */
+.call-entry.outgoing.missed .call-status,
+.call-entry.rejected .call-status,
+.call-entry.busy .call-status,
+.call-entry.failed .call-status,
+.call-entry.cancelled .call-status,
+.call-entry.no-answer .call-status,
+.call-entry.unavailable .call-status {
+    background-color: #fadbd8;
+    color: #c0392b;
+}
+
+.call-duration {
+    font-family: monospace;
+    display: inline;
 }

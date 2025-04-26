@@ -3,10 +3,14 @@
 // We can't use importScripts with type:module in manifest v3
 // We'll need to include the SIP.js library in the HTML file
 
+// Import the call log module
+import CallLog from './call-log.js';
+
 // Global state
 let simpleUser = null;
 let userAgent = null;
 let currentCall = null;
+let currentCallId = null;
 let connectionState = {
   isConnected: false,
   isRegistered: false,
@@ -340,7 +344,7 @@ function logWithDetails(action, details = {}) {
 }
 
 // Centralized function to handle BYE packets
-function handleByePacket(session, bye) {
+async function handleByePacket(session, bye) {
   logWithDetails('HANDLE_BYE_PACKET', {
     sessionId: session ? session.id : 'unknown',
     sessionExists: !!session,
@@ -353,8 +357,247 @@ function handleByePacket(session, bye) {
     currentCallMatchesSession: currentCall === session
   });
 
-  // Store a copy of the session before clearing references
-  const sessionCopy = session;
+  // Log the call end in the call log
+  if (currentCallId) {
+    // Get the current call data to check if it was answered
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['currentCall'], resolve);
+    });
+
+    // Log the current call data for debugging
+    logWithDetails('CURRENT_CALL_DATA_FOR_BYE', {
+      currentCallId,
+      currentCallData: result.currentCall ? {
+        id: result.currentCall.id,
+        direction: result.currentCall.direction,
+        answered: result.currentCall.answered,
+        status: result.currentCall.status,
+        startTime: result.currentCall.startTime,
+        answerTime: result.currentCall.answerTime
+      } : 'no data',
+      connectionState: {
+        callDirection: connectionState.callDirection,
+        callStatus: connectionState.callStatus
+      },
+      sessionState: session ? session.state : 'unknown'
+    });
+
+    // Store the call ID we're about to process
+    const callIdToProcess = currentCallId;
+
+    // Clear the current call ID immediately to prevent duplicate processing
+    currentCallId = null;
+
+    // DIRECT FIX: Force the correct status based on call data
+    let callStatus;
+
+    // Check for SIP response codes in the session that indicate rejection
+    const statusCode = session && session.lastResponse ? session.lastResponse.statusCode : null;
+    const reasonPhrase = session && session.lastResponse ? session.lastResponse.reasonPhrase : null;
+
+    // Log the SIP response information
+    logWithDetails('SIP_RESPONSE_INFO_IN_BYE_HANDLER', {
+      statusCode: statusCode,
+      reasonPhrase: reasonPhrase,
+      sessionState: session ? session.state : 'unknown',
+      callDirection: result.currentCall ? result.currentCall.direction : connectionState.callDirection
+    });
+
+    // Check for rejection indicators in the SIP response
+    let isRejectedBySipResponse = false;
+    let isUnavailableBySipResponse = false;
+
+    if (statusCode) {
+      if (statusCode === 486 || statusCode === 603 || statusCode === 487 || statusCode >= 600) {
+        isRejectedBySipResponse = true;
+        logWithDetails('DETECTED_REJECTION_FROM_SIP_RESPONSE', {
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase
+        });
+      } else if (statusCode === 480) {
+        isUnavailableBySipResponse = true;
+        logWithDetails('DETECTED_UNAVAILABLE_FROM_SIP_RESPONSE', {
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase,
+          sessionState: session ? session.state : 'unknown',
+          callDirection: result.currentCall ? result.currentCall.direction : connectionState.callDirection,
+          currentCallData: result.currentCall ? {
+            id: result.currentCall.id,
+            direction: result.currentCall.direction,
+            answered: result.currentCall.answered,
+            status: result.currentCall.status
+          } : 'no data'
+        });
+
+        // Force log to console for debugging
+        console.warn('SIP 480 DETECTED', {
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase,
+          sessionState: session ? session.state : 'unknown',
+          callDirection: result.currentCall ? result.currentCall.direction : connectionState.callDirection
+        });
+      }
+    }
+
+    if (reasonPhrase &&
+        (reasonPhrase.toLowerCase().includes('reject') ||
+         reasonPhrase.toLowerCase().includes('decline'))) {
+      isRejectedBySipResponse = true;
+      logWithDetails('DETECTED_REJECTION_FROM_REASON_PHRASE', {
+        reasonPhrase: reasonPhrase
+      });
+    }
+
+    if (result.currentCall && result.currentCall.answered === true) {
+      // If the call was definitely answered, mark as completed
+      callStatus = 'completed';
+      logWithDetails('FORCE_COMPLETED_STATUS', {
+        reason: 'Call was answered',
+        answered: result.currentCall.answered,
+        answerTime: result.currentCall.answerTime
+      });
+    } else if (result.currentCall && result.currentCall.status === 'rejected') {
+      // If the call was explicitly rejected, mark as rejected
+      callStatus = 'rejected';
+      logWithDetails('FORCE_REJECTED_STATUS', {
+        reason: 'Call was explicitly rejected',
+        status: result.currentCall.status
+      });
+    } else if (result.currentCall && result.currentCall.direction === 'incoming' && !result.currentCall.answered) {
+      // If it was an incoming call that wasn't answered, mark as missed
+      callStatus = 'missed';
+      logWithDetails('FORCE_MISSED_STATUS', {
+        reason: 'Incoming call was not answered',
+        direction: result.currentCall.direction,
+        answered: result.currentCall.answered
+      });
+    } else if (result.currentCall && result.currentCall.direction === 'outgoing' && !result.currentCall.answered) {
+      // If it was an outgoing call that wasn't answered, check for rejection or unavailability
+      if (result.currentCall.status === 'rejected' || isRejectedBySipResponse) {
+        // If the call was explicitly rejected by the remote party
+        callStatus = 'rejected';
+
+        // Update the call status in storage to ensure consistency
+        if (result.currentCall.status !== 'rejected') {
+          const updatedCall = {
+            ...result.currentCall,
+            status: 'rejected'
+          };
+
+          // Save the updated call data
+          await chrome.storage.local.set({ currentCall: updatedCall });
+          logWithDetails('UPDATED_OUTGOING_CALL_STATUS_TO_REJECTED_IN_BYE', {
+            callId: callIdToProcess,
+            previousStatus: result.currentCall.status,
+            statusCode: statusCode,
+            reasonPhrase: reasonPhrase
+          });
+        }
+
+        logWithDetails('FORCE_REJECTED_STATUS_FOR_OUTGOING', {
+          reason: 'Outgoing call was rejected by remote party',
+          direction: result.currentCall.direction,
+          status: 'rejected',
+          sipStatusCode: statusCode,
+          sipReasonPhrase: reasonPhrase
+        });
+      } else if (isUnavailableBySipResponse) {
+        // If the remote party is temporarily unavailable (SIP 480)
+        callStatus = 'unavailable';
+
+        // Update the call status in storage to ensure consistency
+        const updatedCall = {
+          ...result.currentCall,
+          status: 'unavailable'
+        };
+
+        // Save the updated call data
+        await chrome.storage.local.set({ currentCall: updatedCall });
+        logWithDetails('UPDATED_OUTGOING_CALL_STATUS_TO_UNAVAILABLE_IN_BYE', {
+          callId: callIdToProcess,
+          previousStatus: result.currentCall.status,
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase
+        });
+
+        logWithDetails('FORCE_UNAVAILABLE_STATUS_FOR_OUTGOING', {
+          reason: 'Remote party is temporarily unavailable',
+          direction: result.currentCall.direction,
+          status: 'unavailable',
+          sipStatusCode: statusCode,
+          sipReasonPhrase: reasonPhrase
+        });
+      } else if (result.currentCall.status === 'cancelled') {
+        // If the call was cancelled by the local user
+        callStatus = 'cancelled';
+        logWithDetails('FORCE_CANCELLED_STATUS_FOR_OUTGOING', {
+          reason: 'Outgoing call was cancelled by local user',
+          direction: result.currentCall.direction,
+          status: result.currentCall.status
+        });
+      } else {
+        // Default for unanswered outgoing calls
+        callStatus = 'no-answer';
+        logWithDetails('FORCE_NO_ANSWER_STATUS', {
+          reason: 'Outgoing call was not answered',
+          direction: result.currentCall.direction,
+          answered: result.currentCall.answered,
+          status: result.currentCall.status || 'none'
+        });
+      }
+    } else if (session && session.state === 'Established') {
+      // If the session was established, mark as completed
+      callStatus = 'completed';
+      logWithDetails('FORCE_COMPLETED_STATUS_FROM_SESSION', {
+        reason: 'Session was established',
+        sessionState: session.state
+      });
+    } else if (connectionState.callDirection === 'incoming') {
+      // Default for incoming calls
+      callStatus = 'missed';
+      logWithDetails('DEFAULT_MISSED_STATUS', {
+        reason: 'Default for incoming call',
+        callDirection: connectionState.callDirection
+      });
+    } else {
+      // Default for outgoing calls - check for rejection or unavailability indicators
+      if (isRejectedBySipResponse) {
+        callStatus = 'rejected';
+        logWithDetails('DEFAULT_REJECTED_STATUS_FROM_SIP', {
+          reason: 'SIP response indicates rejection',
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase
+        });
+      } else if (isUnavailableBySipResponse) {
+        callStatus = 'unavailable';
+        logWithDetails('DEFAULT_UNAVAILABLE_STATUS_FROM_SIP', {
+          reason: 'SIP response indicates temporary unavailability',
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase
+        });
+      } else {
+        callStatus = 'no-answer';
+        logWithDetails('DEFAULT_NO_ANSWER_STATUS', {
+          reason: 'Default for outgoing call',
+          callDirection: connectionState.callDirection
+        });
+      }
+    }
+
+    // Log the final status decision
+    logWithDetails('FINAL_CALL_STATUS_DECISION', {
+      callId: callIdToProcess,
+      finalStatus: callStatus,
+      callData: result.currentCall ? {
+        direction: result.currentCall.direction,
+        answered: result.currentCall.answered,
+        status: result.currentCall.status
+      } : 'no data'
+    });
+
+    // End the call with the determined status
+    await CallLog.endCall(callIdToProcess, callStatus);
+  }
 
   // Update UI immediately with consistent message
   updateConnectionState({
@@ -510,7 +753,7 @@ async function connect(server, wsServerUrl, username, password, displayName) {
 
     // Add event listeners
     simpleUser.delegate = {
-      onCallReceived: (session) => {
+      onCallReceived: async (session) => {
         logWithDetails('DELEGATE_CALL_RECEIVED', {
           sessionId: session ? session.id : 'unknown',
           sessionExists: !!session
@@ -521,6 +764,7 @@ async function connect(server, wsServerUrl, username, password, displayName) {
 
         // Extract caller information from the session
         let caller = 'Unknown';
+        let callerNumber = 'Unknown';
         if (session && session.request && session.request.from) {
           // Try to get the display name or URI
           const fromHeader = session.request.from;
@@ -529,8 +773,17 @@ async function connect(server, wsServerUrl, username, password, displayName) {
           } else if (fromHeader.uri) {
             caller = fromHeader.uri.user + '@' + fromHeader.uri.host;
           }
-          logWithDetails('CALLER_INFO', { caller });
+
+          // Get the caller number (SIP URI user part)
+          if (fromHeader.uri && fromHeader.uri.user) {
+            callerNumber = fromHeader.uri.user;
+          }
+
+          logWithDetails('CALLER_INFO', { caller, callerNumber });
         }
+
+        // Start tracking the call in the call log
+        currentCallId = await CallLog.startCall('incoming', callerNumber, caller);
 
         // Store the fact that we have an incoming call in a more persistent way
         chrome.storage.local.set({ hasIncomingCall: true }, () => {
@@ -671,7 +924,7 @@ async function connect(server, wsServerUrl, username, password, displayName) {
             // Create the notification
             chrome.notifications.create('incoming-call', {
               type: 'basic',
-              iconUrl: 'icons/icon16.png',
+              iconUrl: 'icons/icon48.png',
               title: 'Incoming Call',
               message: 'You have an incoming call. Open the extension to answer.',
               priority: 2
@@ -689,12 +942,17 @@ async function connect(server, wsServerUrl, username, password, displayName) {
           }
         });
       },
-      onCallAnswered: () => {
+      onCallAnswered: async () => {
         logWithDetails('DELEGATE_CALL_ANSWERED');
         updateConnectionState({
           callStatus: 'Call connected',
           hasActiveCall: true
         });
+
+        // Update call log to mark the call as answered
+        if (currentCallId) {
+          await CallLog.callAnswered(currentCallId);
+        }
 
         // Send an additional notification to ensure the UI is updated
         chrome.runtime.sendMessage({
@@ -804,8 +1062,8 @@ async function connect(server, wsServerUrl, username, password, displayName) {
               callDirection: null
             });
 
-            // Store the session reference before clearing it
-            const sessionCopy = session;
+            // We used to make a local copy of the session, but it's not needed
+            // since we're using async/await which maintains the reference
 
             // Clear the current call reference
             currentCall = null;
@@ -833,8 +1091,118 @@ async function connect(server, wsServerUrl, username, password, displayName) {
           });
         }
       },
-      onCallHangup: () => {
-        logWithDetails('DELEGATE_CALL_HANGUP');
+      onCallHangup: async () => {
+        // This is the main onCallHangup handler that gets called when a call is rejected by the remote side
+        // Get the session and response information if available
+        const session = simpleUser._session;
+        const statusCode = session && session.lastResponse ? session.lastResponse.statusCode : null;
+        const reasonPhrase = session && session.lastResponse ? session.lastResponse.reasonPhrase : null;
+
+        logWithDetails('DELEGATE_CALL_HANGUP', {
+          sessionExists: !!session,
+          sessionId: session ? session.id : 'unknown',
+          sessionState: session ? session.state : 'unknown',
+          lastResponse: session && session.lastResponse ? {
+            statusCode: statusCode,
+            reasonPhrase: reasonPhrase
+          } : 'none',
+          callDirection: connectionState.callDirection,
+          currentCallId: currentCallId
+        });
+
+        // Check if we still have a valid call ID
+        if (!currentCallId) {
+          logWithDetails('DELEGATE_CALL_HANGUP_SKIPPED', {
+            reason: 'No current call ID - call may have already been logged',
+            callDirection: connectionState.callDirection
+          });
+
+          // Still update the UI state
+          updateConnectionState({
+            callStatus: 'Call ended',
+            hasActiveCall: false,
+            callDirection: null
+          });
+
+          currentCall = null;
+          chrome.storage.local.set({ hasIncomingCall: false });
+
+          // Send notification for UI update
+          chrome.runtime.sendMessage({
+            action: 'callHangup',
+            state: connectionState,
+            callTerminated: true,
+            byeReceived: true
+          });
+
+          return; // Skip the rest of the handler
+        }
+
+        // Determine the appropriate status for the call log
+        let callStatus = connectionState.callDirection === 'incoming' ? 'missed' : 'no-answer';
+
+        // Log the reason phrase to help with debugging
+        logWithDetails('CALL_HANGUP_REASON', {
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase,
+          callDirection: connectionState.callDirection
+        });
+
+        if (statusCode) {
+          if (statusCode === 486) {
+            callStatus = 'busy';
+          } else if (statusCode === 603) {
+            callStatus = 'rejected';
+          } else if (statusCode === 487) {
+            // 487 Request Terminated is often used for rejected calls
+            callStatus = 'rejected';
+          } else if (statusCode >= 600) {
+            // All 6xx responses are rejections
+            callStatus = 'rejected';
+          } else if (statusCode >= 400) {
+            callStatus = 'failed';
+          }
+        }
+
+        // Check the reason phrase for rejection indicators
+        if (reasonPhrase &&
+            (reasonPhrase.toLowerCase().includes('reject') ||
+             reasonPhrase.toLowerCase().includes('decline'))) {
+          callStatus = 'rejected';
+        }
+
+        // Get the current call data to check if it was explicitly rejected
+        const result = await new Promise(resolve => {
+          chrome.storage.local.get(['currentCall'], resolve);
+        });
+
+        if (result.currentCall && result.currentCall.status === 'rejected') {
+          callStatus = 'rejected';
+          logWithDetails('USING_REJECTED_STATUS_FROM_CALL_DATA', {
+            callId: currentCallId,
+            currentStatus: result.currentCall.status
+          });
+        }
+
+        // Log the call in the call log
+        if (currentCallId) {
+          logWithDetails('LOGGING_CALL_END_IN_MAIN_HANDLER', {
+            callId: currentCallId,
+            status: callStatus
+          });
+
+          // Store the call ID we're about to process
+          const callIdToProcess = currentCallId;
+
+          // Clear the current call ID immediately to prevent duplicate processing
+          currentCallId = null;
+
+          // Now process the call
+          await CallLog.endCall(callIdToProcess, callStatus);
+        } else {
+          logWithDetails('NO_CURRENT_CALL_ID_IN_MAIN_HANDLER');
+        }
+
         updateConnectionState({
           callStatus: 'Call ended',
           hasActiveCall: false,
@@ -1028,6 +1396,9 @@ async function makeCall(target, server) {
       return;
     }
 
+    // Start tracking the call in the call log
+    currentCallId = await CallLog.startCall('outgoing', target, null);
+
     // Create a proper target URI
     let targetUri;
     try {
@@ -1117,15 +1488,152 @@ async function makeCall(target, server) {
 
       // Add response event listener to catch SIP responses like 486 Busy Here
       // Always override the onCallHangup handler to ensure it works properly
-      session.delegate.onCallHangup = () => {
+      session.delegate.onCallHangup = async () => {
+        // Get the response status code and reason phrase if available
+        const statusCode = session.lastResponse ? session.lastResponse.statusCode : null;
+        const reasonPhrase = session.lastResponse ? session.lastResponse.reasonPhrase : null;
+
         logWithDetails('DELEGATE_CALL_HANGUP_FOR_OUTGOING', {
           sessionId: session.id,
           sessionState: session.state,
           lastResponse: session.lastResponse ? {
-            statusCode: session.lastResponse.statusCode,
-            reasonPhrase: session.lastResponse.reasonPhrase
+            statusCode: statusCode,
+            reasonPhrase: reasonPhrase
           } : 'none'
         });
+
+        // Determine the appropriate status for the call log
+        let callStatus = 'no-answer';
+
+        // Log the reason phrase to help with debugging
+        logWithDetails('SESSION_CALL_HANGUP_REASON', {
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase,
+          callDirection: 'outgoing'
+        });
+
+        // Mark the call as rejected in the call data
+        const result = await new Promise(resolve => {
+          chrome.storage.local.get(['currentCall'], resolve);
+        });
+
+        if (result.currentCall) {
+          // Update the call status based on the response
+          let updatedStatus = 'no-answer';
+
+          if (statusCode) {
+            if (statusCode === 486) {
+              updatedStatus = 'busy';
+            } else if (statusCode === 480) {
+              // 480 Temporarily Unavailable
+              updatedStatus = 'unavailable';
+
+              // Force log to console for debugging
+              console.warn('SIP 480 DETECTED IN ONCALLHANGUP', {
+                statusCode: statusCode,
+                reasonPhrase: reasonPhrase,
+                sessionState: session ? session.state : 'unknown',
+                callDirection: 'outgoing'
+              });
+
+              logWithDetails('DETECTED_UNAVAILABLE_IN_ONCALLHANGUP', {
+                statusCode: statusCode,
+                reasonPhrase: reasonPhrase,
+                sessionState: session ? session.state : 'unknown',
+                callDirection: 'outgoing',
+                currentCallData: result.currentCall ? {
+                  id: result.currentCall.id,
+                  direction: result.currentCall.direction,
+                  answered: result.currentCall.answered,
+                  status: result.currentCall.status
+                } : 'no data'
+              });
+            } else if (statusCode === 603) {
+              updatedStatus = 'rejected';
+            } else if (statusCode === 487) {
+              // 487 Request Terminated is often used for rejected calls
+              updatedStatus = 'rejected';
+            } else if (statusCode >= 600) {
+              // All 6xx responses are rejections
+              updatedStatus = 'rejected';
+            } else if (statusCode >= 400) {
+              updatedStatus = 'failed';
+            }
+          }
+
+          // Check the reason phrase for rejection indicators
+          if (reasonPhrase &&
+              (reasonPhrase.toLowerCase().includes('reject') ||
+               reasonPhrase.toLowerCase().includes('decline'))) {
+            updatedStatus = 'rejected';
+          }
+
+          // Update the call status in storage
+          const updatedCall = {
+            ...result.currentCall,
+            status: updatedStatus
+          };
+
+          // Save the updated call data
+          await chrome.storage.local.set({ currentCall: updatedCall });
+          logWithDetails('UPDATED_OUTGOING_CALL_STATUS_FROM_HANGUP', {
+            callId: currentCallId,
+            newStatus: updatedStatus,
+            statusCode: statusCode,
+            reasonPhrase: reasonPhrase
+          });
+
+          // Use the updated status for the call log
+          callStatus = updatedStatus;
+        } else {
+          // If we don't have call data, determine status from the response
+          if (statusCode) {
+            if (statusCode === 486) {
+              callStatus = 'busy';
+            } else if (statusCode === 480) {
+              // 480 Temporarily Unavailable
+              callStatus = 'unavailable';
+
+              // Force log to console for debugging
+              console.warn('SIP 480 DETECTED IN ONCALLHANGUP FALLBACK', {
+                statusCode: statusCode,
+                reasonPhrase: reasonPhrase,
+                sessionState: session ? session.state : 'unknown',
+                callDirection: 'outgoing'
+              });
+
+              logWithDetails('DETECTED_UNAVAILABLE_IN_ONCALLHANGUP_FALLBACK', {
+                statusCode: statusCode,
+                reasonPhrase: reasonPhrase,
+                sessionState: session ? session.state : 'unknown',
+                callDirection: 'outgoing'
+              });
+            } else if (statusCode === 603) {
+              callStatus = 'rejected';
+            } else if (statusCode === 487) {
+              // 487 Request Terminated is often used for rejected calls
+              callStatus = 'rejected';
+            } else if (statusCode >= 600) {
+              // All 6xx responses are rejections
+              callStatus = 'rejected';
+            } else if (statusCode >= 400) {
+              callStatus = 'failed';
+            }
+          }
+
+          // Check the reason phrase for rejection indicators
+          if (reasonPhrase &&
+              (reasonPhrase.toLowerCase().includes('reject') ||
+               reasonPhrase.toLowerCase().includes('decline'))) {
+            callStatus = 'rejected';
+          }
+        }
+
+        // Log the call in the call log
+        if (currentCallId) {
+          await CallLog.endCall(currentCallId, callStatus);
+          currentCallId = null;
+        }
 
         // Update connection state
         updateConnectionState({
@@ -1211,6 +1719,11 @@ async function answer() {
     // Clear the incoming call flag
     chrome.storage.local.set({ hasIncomingCall: false });
 
+    // Update call log to mark the call as answered
+    if (currentCallId) {
+      await CallLog.callAnswered(currentCallId);
+    }
+
     updateConnectionState({
       callStatus: 'Call connected',
       hasActiveCall: true,
@@ -1265,15 +1778,58 @@ async function answer() {
 
       // Add specific onCallHangup handler for incoming calls
       // Always override the onCallHangup handler to ensure it works properly
-      session.delegate.onCallHangup = () => {
+      session.delegate.onCallHangup = async () => {
+        // Get the response status code and reason phrase if available
+        const statusCode = session.lastResponse ? session.lastResponse.statusCode : null;
+        const reasonPhrase = session.lastResponse ? session.lastResponse.reasonPhrase : null;
+
         logWithDetails('DELEGATE_CALL_HANGUP_FOR_INCOMING', {
           sessionId: session.id,
           sessionState: session.state,
           lastResponse: session.lastResponse ? {
-            statusCode: session.lastResponse.statusCode,
-            reasonPhrase: session.lastResponse.reasonPhrase
+            statusCode: statusCode,
+            reasonPhrase: reasonPhrase
           } : 'none'
         });
+
+        // Determine the appropriate status for the call log
+        let callStatus = 'missed';
+
+        // Log the reason phrase to help with debugging
+        logWithDetails('INCOMING_CALL_HANGUP_REASON', {
+          statusCode: statusCode,
+          reasonPhrase: reasonPhrase,
+          callDirection: 'incoming'
+        });
+
+        if (statusCode) {
+          if (statusCode === 486) {
+            callStatus = 'busy';
+          } else if (statusCode === 603) {
+            callStatus = 'rejected';
+          } else if (statusCode === 487) {
+            // 487 Request Terminated is often used for rejected calls
+            callStatus = 'rejected';
+          } else if (statusCode >= 600) {
+            // All 6xx responses are rejections
+            callStatus = 'rejected';
+          } else if (statusCode >= 400) {
+            callStatus = 'failed';
+          }
+        }
+
+        // Check the reason phrase for rejection indicators
+        if (reasonPhrase &&
+            (reasonPhrase.toLowerCase().includes('reject') ||
+             reasonPhrase.toLowerCase().includes('decline'))) {
+          callStatus = 'rejected';
+        }
+
+        // Log the call in the call log
+        if (currentCallId) {
+          await CallLog.endCall(currentCallId, callStatus);
+          currentCallId = null;
+        }
 
         // Update connection state
         updateConnectionState({
@@ -1357,6 +1913,29 @@ async function reject() {
     // Clear the incoming call flag
     chrome.storage.local.set({ hasIncomingCall: false });
 
+    // Mark the call as rejected in the call data
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['currentCall'], resolve);
+    });
+
+    if (result.currentCall) {
+      // Update the call status to rejected
+      const updatedCall = {
+        ...result.currentCall,
+        status: 'rejected'
+      };
+
+      // Save the updated call data
+      await chrome.storage.local.set({ currentCall: updatedCall });
+      logWithDetails('UPDATED_CALL_STATUS_TO_REJECTED', { callId: currentCallId });
+    }
+
+    // Log the call rejection in the call log
+    if (currentCallId) {
+      await CallLog.endCall(currentCallId, 'rejected');
+      currentCallId = null;
+    }
+
     updateConnectionState({
       callStatus: 'Call rejected',
       hasActiveCall: false,
@@ -1406,6 +1985,9 @@ async function hangup() {
     }
 
     // Access the underlying session if possible
+    // Define session variable in the outer scope so it's available throughout the function
+    let session = null;
+
     if (simpleUser) {
       // Log the simpleUser object structure
       logWithDetails('SIMPLE_USER_OBJECT', {
@@ -1415,7 +1997,7 @@ async function hangup() {
       });
 
       // Try to access the session directly
-      const session = simpleUser._session || simpleUser.session;
+      session = simpleUser._session || simpleUser.session;
 
       if (session) {
         logWithDetails('SESSION_OBJECT', {
@@ -1451,8 +2033,8 @@ async function hangup() {
               remoteTarget: session.remoteTarget ? session.remoteTarget.toString() : 'none'
             });
 
-            // Make a local copy of the session to ensure it's not lost
-            const sessionCopy = session;
+            // We used to make a local copy of the session, but it's not needed
+            // since we're using async/await which maintains the reference
 
             // Call the standard bye method
             await session.bye();
@@ -1464,6 +2046,30 @@ async function hangup() {
             // For sessions in the process of being established
             if (callDirection === 'outgoing') {
               logWithDetails('USING_CANCEL_METHOD', { state: session.state });
+
+              // Mark the call as cancelled in the call data
+              const result = await new Promise(resolve => {
+                chrome.storage.local.get(['currentCall'], resolve);
+              });
+
+              if (result.currentCall) {
+                // Update the call status to cancelled
+                const updatedCall = {
+                  ...result.currentCall,
+                  status: 'cancelled'
+                };
+
+                // Save the updated call data
+                await chrome.storage.local.set({ currentCall: updatedCall });
+                logWithDetails('UPDATED_OUTGOING_CALL_STATUS_TO_CANCELLED', { callId: currentCallId });
+              }
+
+              // Log the cancelled outgoing call before cancelling
+              if (currentCallId) {
+                await CallLog.endCall(currentCallId, 'cancelled');
+                currentCallId = null;
+              }
+
               await session.cancel();
               logWithDetails('CANCEL_SUCCESS');
             } else {
@@ -1497,6 +2103,80 @@ async function hangup() {
     // Clear the incoming call flag
     chrome.storage.local.set({ hasIncomingCall: false });
     logWithDetails('CLEARED_INCOMING_CALL_FLAG');
+
+    // Log the call end in the call log
+    if (currentCallId) {
+      // Determine the appropriate status based on call direction
+      let callStatus = 'completed';
+
+      // Get the current call data to check if it was answered or explicitly rejected
+      const result = await new Promise(resolve => {
+        chrome.storage.local.get(['currentCall'], resolve);
+      });
+
+      if (result.currentCall) {
+        // If the call was answered, mark it as completed
+        if (result.currentCall.answered) {
+          callStatus = 'completed';
+          logWithDetails('MARKING_CALL_AS_COMPLETED', {
+            callDirection: callDirection,
+            sessionState: session ? session.state : 'unknown',
+            wasAnswered: true
+          });
+        }
+        // If this is an incoming call that was explicitly rejected, mark it as rejected
+        else if (callDirection === 'incoming' &&
+                (result.currentCall.status === 'rejected' || session && session.state !== 'Established')) {
+          callStatus = 'rejected';
+
+          // Update the call status to rejected in storage
+          const updatedCall = {
+            ...result.currentCall,
+            status: 'rejected'
+          };
+
+          // Save the updated call data
+          await chrome.storage.local.set({ currentCall: updatedCall });
+
+          logWithDetails('MARKING_INCOMING_CALL_AS_REJECTED', {
+            callDirection: callDirection,
+            sessionState: session ? session.state : 'unknown',
+            wasAnswered: false,
+            currentStatus: result.currentCall.status
+          });
+        } else {
+          logWithDetails('USING_DEFAULT_CALL_STATUS', {
+            callDirection: callDirection,
+            sessionState: session ? session.state : 'unknown',
+            defaultStatus: callStatus
+          });
+        }
+      } else {
+        // If we can't get the call data, use the session state as a fallback
+        if (callDirection === 'incoming' && session && session.state !== 'Established') {
+          callStatus = 'rejected';
+          logWithDetails('FALLBACK_MARKING_INCOMING_CALL_AS_REJECTED', {
+            callDirection: callDirection,
+            sessionState: session ? session.state : 'unknown'
+          });
+        } else if (session && session.state === 'Established') {
+          callStatus = 'completed';
+          logWithDetails('FALLBACK_MARKING_CALL_AS_COMPLETED', {
+            callDirection: callDirection,
+            sessionState: session ? session.state : 'unknown'
+          });
+        } else {
+          logWithDetails('FALLBACK_USING_DEFAULT_STATUS', {
+            callDirection: callDirection,
+            sessionState: session ? session.state : 'unknown',
+            defaultStatus: callStatus
+          });
+        }
+      }
+
+      await CallLog.endCall(currentCallId, callStatus);
+      currentCallId = null;
+    }
 
     updateConnectionState({
       callStatus: 'Call ended',

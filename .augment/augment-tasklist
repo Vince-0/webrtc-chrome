@@ -60,39 +60,38 @@ UX: On inbound call the phone tab and call status does not show the incoming cal
 INFRA: Remove periodic UI refresh mechanism and ensure UI updates are driven purely by events:CHECKPOINT:104
 UX: The incoming call browser notification pops up three times. It should only show once.:CHECKPOINT:112
 UX: On outbound call, after pressing hangup, the hangup button remains active without an active call. If the call status is call ended, the hangup button should be disabled.:CHECKPOINT:95,113
+UX: In the settings tab, move the display name field under the password field. Retain the auto-fill function.:CHECKPOINT:126
+UX: Add icons for the 48 and 128 sizes, use them instead of the 16 size.:CHECKPOINT:129
+UX: Call log feature should be added to keep a history of calls made and received. A timestamp, call direction, and call duration should be displayed in the call log tab.:CHECKPOINT:132
+UX: It is not easily apparent which direction the call in the call log was going. Add text for inbound and outbound calls.:CHECKPOINT:135
+UX: It appears outbound calls do not show in the call log.:CHECKPOINT:135,136,137,138
+UX: It appears that cancelled calls show in the log as completed.:CHECKPOINT:135
+UX: Incoming calls that are rejected/hung up are shown as completed, they should be shown as rejected.:CHECKPOINT:140
+UX: Incoming calls that were answered are showing as missed in the call log.:CHECKPOINT:141
+UX: Inbound calls that are rejected are incorrectly labeled as missed, and inbound calls that are answered are not showing as completed.:CHECKPOINT:142,143
+UX: Incoming calls that are hung up locally still show as missed, with a ReferenceError in the console.:CHECKPOINT:144
+UX: Incoming calls are being shown in the call log twice - first as missed, incorrectly and second as rejected correctly.:CHECKPOINT:145
+UX: Outgoing calls that get hung up or cancelled by the local user are incorrectly labeled as rejected in the call log.:CHECKPOINT:147
+UX: Remove Call History header and dividers from the call log tab.:CHECKPOINT:154
+UX: Reduce the number of lines in each call log entry display, for example put the call status on the same line as the other info. Also use a blue colour instead of red for incoming calls.:CHECKPOINT:155
+UX: Add functionality to the call log to add a clickable phone icon next to the call log entry that will populate the phone tab destination and make a call to the number that was in the call log entry.:CHECKPOINT:156
+
 
 #STATUS:PENDING:
 
 
-
 #STATUS:NEW:
+INFRA: Hold functionality is needed. There should be functions for this in SIP.js documentation but a hold button needs to be created and displayed once a call is up.
 
-UX: In the settings tab, move the display name field under the password field. Retain the auto-fill function.
+INFRA: Mute functionality is needed. There should be functions for this in SIP.js documentation but a mute button needs to be created and displayed once a call is up. This should mute the microphone and speaker.
 
-UX: Add settings input boxes for the STUN servers that are present in the peerConnectionConfiguration. Autofill with stun:stun.l.google.com:19302. 
-
-UX: Add icons for the required sizes.
-
-UX: Call log feature should be added to keep a history of calls made and received. It should be displayed in a collapsible section above the settings section. It should show 5 history entries and be scrollable.
+UX: Make browser notifications a setting that can be enabled and disabled. It should be at the bottom of the settings tab under the disconnect button.
 
 UX: Call transfers need to be implemented. There should be functions for this in SIP.js documentation but a transfer button needs to be created and displayed once a call is up.
 
-INFRA: DTMF
-INFRA: Hold
-INFRA: Mute
-INFRA: Click to call
+INFRA: DTMF functions need to be added. There should be a DTMF button that can be clicked to send DTMF tones. Ask any questions that could elaborate and clarify implementation of this feature.
 
-INFRA: Manifest version 2 is deprecated, and support will be removed in 2024. See https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline for details.:CHECKPOINT:47,48,49,50,51,53,54
-UX: Persist password:CHECKPOINT:47
-INFRA: Unchecked runtime.lastError: Unable to download all specified images. background.html:0 (anonymous function):CHECKPOINT:47
-INFRA: Permission '*://*/*' is unknown.:CHECKPOINT:48
-INFRA: Connection error: ReferenceError: SIP is not defined:CHECKPOINT:49
-INFRA: Connection error: ReferenceError: window is not defined:CHECKPOINT:50
-INFRA: Call failed: MediaStream is not defined:CHECKPOINT:51
-INFRA: SessionDescriptionHandler.getDescription failed - Error: Media devices not available in insecure contexts:CHECKPOINT:53
-INFRA: TypeError: this._peerConnection.getReceivers is not a function:CHECKPOINT:54
-BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
-
+INFRA: Click to call recognition of telephone numbers in the browser web pages needs to be implemented whereby a phone number recognized in any web page is made clickable and when clicked, it will populate the phone tab destination and make a call to the number.
 
 INFRA: Console logging can be removed and all code that uses it can be removed.
 
@@ -105,8 +104,28 @@ INFRA: Investigate for any potential security improvements.
 INFRA: Add automated tests for the extension functionality.
 INFRA: Package the extension for distribution
 
+INFRA: Update the augment-README file to reflect the current state of the project. This file is not for end user documentation but for developers and contributors to understand the project, its features, directory structure, prerequisites, installation, configuration details, usage, key files and key functions. It should provide useful information to any other AI/LLM to be able to start developing it by just reading the README file.
 
-#STATUS: PARKED
+INFRA: Manifest version 2 is deprecated, and support will be removed in 2024. See https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline for details.:CHECKPOINT:47,48,49,50,51,53,54
+INFRA: Unchecked runtime.lastError: Unable to download all specified images. background.html:0 (anonymous function):CHECKPOINT:47
+INFRA: Permission '*://*/*' is unknown.:CHECKPOINT:48
+INFRA: Connection error: ReferenceError: SIP is not defined:CHECKPOINT:49
+INFRA: Connection error: ReferenceError: window is not defined:CHECKPOINT:50
+INFRA: Call failed: MediaStream is not defined:CHECKPOINT:51
+INFRA: SessionDescriptionHandler.getDescription failed - Error: Media devices not available in insecure contexts:CHECKPOINT:53
+INFRA: TypeError: this._peerConnection.getReceivers is not a function:CHECKPOINT:54
+
+BUG: Error: Microphone access denied. Microphone and speaker access is required for making and receiving calls.
+
+#STATUS: PARKED:
+UX: Add settings input boxes for the STUN servers that are present in the peerConnectionConfiguration. Autofill with stun:stun.l.google.com:19302.
+
+
+#STATUS: BROKEN:
+UX: Outbound calls that get rejected/hung up during ringing/trying are being incorrectly labeled as no answer.:CHECKPOINT:146
+UX: Outbound calls that are rejected or hung up by the remote party are incorrectly labeled as no answer in the call log.:CHECKPOINT:148,151
+UX: SIP 480 Temporarily Unavailable responses from remote party are incorrectly logged as no answer instead of unavailable.:CHECKPOINT:152,153
+
 INFRA: On inbound call, when the remote side hangs up, the phone tab UI does not update with the appropriate call ended status. On outbound call, when the remote side hangs up, the phone tab UI does correctly update with the call ended status. Investigate how these two scenarios are different and fix the inbound call hangup:CHECKPOINT:102,103,105,118
 
 INFRA: On outbound call, once the remote side answers, I press hangup but the phone hangup does not reach the remote side to end the call. The BYE packet does not get sent and is not seen by the connecting SIP server. This is not the case with an inbound call where if I press hangup the remote side gets it and ends the call on their side. This is also not the case while the call is ringing, whereby if I press hangup the remote side gets it and ends the call on their side.CHECKPOINT:105,106,107,111,116,121

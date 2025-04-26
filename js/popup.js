@@ -2,6 +2,7 @@
 import { createIncomingCallNotification, stopNotifications } from './notifications.js';
 import { playDialTone, stopDialTone } from '../audio/dialtone.js';
 import { playHangupSound } from '../audio/hangupsound.js';
+import CallLog from './call-log.js';
 
 // Enhanced logging function
 function logWithDetails(action, details = {}) {
@@ -65,7 +66,11 @@ const elements = {
 
     // Tab elements
     tabButtons: document.querySelectorAll('.tab-button'),
-    tabPanels: document.querySelectorAll('.tab-panel')
+    tabPanels: document.querySelectorAll('.tab-panel'),
+
+    // Call Log elements
+    callLogEntries: document.querySelector('.call-log-entries'),
+    callLogPlaceholder: document.querySelector('.call-log-placeholder')
 };
 
 // Initialize the application
@@ -93,6 +98,9 @@ function init() {
 
     // Load saved settings from Chrome storage
     loadSavedSettings();
+
+    // Load call log entries
+    loadCallLog();
 
     // Check microphone permissions
     checkMicrophonePermission();
@@ -146,6 +154,11 @@ function init() {
                 caller: message.state.caller || null
             } : null
         });
+
+        // Handle call log updates
+        if (message.action === 'callLogUpdated') {
+            loadCallLog();
+        }
 
         // Handle specific message types
         if (message.action === 'incomingCall') {
@@ -1098,6 +1111,11 @@ function setupTabNavigation() {
             // Save active tab to storage
             chrome.storage.local.set({ activeTab: tabId });
 
+            // If switching to call log tab, refresh the log
+            if (tabId === 'call-log') {
+                loadCallLog();
+            }
+
             logWithDetails('TAB_SWITCHED', {
                 tabId: tabId
             });
@@ -1141,6 +1159,182 @@ function switchToTab(tabId) {
             panelId: activePanel.id
         });
     }
+}
+
+// Load and display call log entries
+async function loadCallLog() {
+    try {
+        // Get call log entries from storage
+        const callLog = await CallLog.getCallLog();
+
+        // Get the container element
+        const container = elements.callLogEntries;
+
+        // Clear existing content
+        container.innerHTML = '';
+
+        if (callLog.length === 0) {
+            // Show placeholder if no entries
+            elements.callLogPlaceholder.style.display = 'block';
+            return;
+        }
+
+        // Hide placeholder
+        elements.callLogPlaceholder.style.display = 'none';
+
+        // Create entries for each call
+        callLog.forEach(entry => {
+            const callEntry = document.createElement('div');
+            callEntry.className = `call-entry ${entry.direction} ${entry.status}`;
+
+            // Create top row with timestamp and status
+            const topRow = document.createElement('div');
+            topRow.className = 'call-top-row';
+
+            // Create timestamp element
+            const timestamp = document.createElement('span');
+            timestamp.className = 'call-timestamp';
+            timestamp.textContent = CallLog.formatTimestamp(entry.timestamp);
+
+            // Create status element
+            const status = document.createElement('span');
+            status.className = 'call-status';
+
+            // Set status text based on status code
+            switch (entry.status) {
+                case 'completed':
+                    status.textContent = 'Completed';
+                    break;
+                case 'missed':
+                    status.textContent = 'Missed';
+                    break;
+                case 'rejected':
+                    status.textContent = 'Rejected';
+                    break;
+                case 'busy':
+                    status.textContent = 'Busy';
+                    break;
+                case 'no-answer':
+                    status.textContent = 'No Answer';
+                    break;
+                case 'cancelled':
+                    status.textContent = 'Cancelled';
+                    break;
+                case 'failed':
+                    status.textContent = 'Failed';
+                    break;
+                case 'unavailable':
+                    status.textContent = 'Unavailable';
+                    break;
+                default:
+                    status.textContent = entry.status;
+            }
+
+            // Add duration to status if call was answered
+            if (entry.answered && entry.formattedDuration) {
+                const duration = document.createElement('span');
+                duration.className = 'call-duration';
+                duration.textContent = entry.formattedDuration;
+                status.appendChild(document.createTextNode(' • '));
+                status.appendChild(duration);
+            }
+
+            // Append timestamp and status to top row
+            topRow.appendChild(timestamp);
+            topRow.appendChild(status);
+
+            // Create bottom row with direction and number
+            const bottomRow = document.createElement('div');
+            bottomRow.className = 'call-direction-number';
+
+            // Create direction icon and label
+            const directionIcon = document.createElement('span');
+            directionIcon.className = 'call-direction-icon';
+            directionIcon.textContent = entry.direction === 'incoming' ? '↓' : '↑';
+
+            // Create direction label
+            const directionLabel = document.createElement('span');
+            directionLabel.className = 'call-direction-label';
+            directionLabel.textContent = entry.direction === 'incoming' ? 'Incoming' : 'Outgoing';
+
+            // Create number/name element
+            const numberName = document.createElement('span');
+            numberName.className = 'call-number-name';
+            numberName.textContent = entry.name !== 'Unknown' ? entry.name : entry.number;
+
+            // Create call button
+            const callButton = document.createElement('span');
+            callButton.className = 'call-button';
+            callButton.innerHTML = '&#128222;'; // Phone icon
+            callButton.title = 'Call this number';
+
+            // Add click event to call button
+            callButton.addEventListener('click', (event) => {
+                event.stopPropagation(); // Prevent event bubbling
+
+                // Get the number to call
+                const numberToCall = entry.number;
+
+                // Log the action
+                logWithDetails('CALL_LOG_ENTRY_CALL_CLICKED', {
+                    number: numberToCall,
+                    name: entry.name,
+                    direction: entry.direction,
+                    timestamp: entry.timestamp
+                });
+
+                // Call the number
+                callFromLog(numberToCall);
+            });
+
+            // Append direction icon, label, number/name, and call button to bottom row
+            bottomRow.appendChild(directionIcon);
+            bottomRow.appendChild(directionLabel);
+            bottomRow.appendChild(numberName);
+            bottomRow.appendChild(callButton);
+
+            // Append rows to the call entry
+            callEntry.appendChild(topRow);
+            callEntry.appendChild(bottomRow);
+
+            // Append the call entry to the container
+            container.appendChild(callEntry);
+        });
+
+        logWithDetails('CALL_LOG_LOADED', { entriesCount: callLog.length });
+    } catch (error) {
+        logWithDetails('LOAD_CALL_LOG_ERROR', { error });
+        // Show error message
+        elements.callLogPlaceholder.textContent = 'Error loading call history.';
+        elements.callLogPlaceholder.style.display = 'block';
+    }
+}
+
+// Function to call a number from the call log
+function callFromLog(number) {
+    if (!number) {
+        logWithDetails('CALL_FROM_LOG_ERROR', { error: 'No number provided' });
+        return;
+    }
+
+    // Switch to the phone tab
+    switchToTab('phone');
+
+    // Populate the destination field
+    elements.callTo.value = number;
+
+    // Check if we're connected before making the call
+    chrome.runtime.sendMessage({ action: 'getState' }, (response) => {
+        if (response && response.state && response.state.isConnected) {
+            // We're connected, make the call
+            logWithDetails('CALL_FROM_LOG_MAKING_CALL', { number });
+            makeCall();
+        } else {
+            // Not connected, show error
+            logWithDetails('CALL_FROM_LOG_NOT_CONNECTED', { number });
+            updateCallStatus('Error: Please connect to the SIP server before making a call');
+        }
+    });
 }
 
 // Initialize the application when the page loads
