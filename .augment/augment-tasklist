@@ -75,10 +75,9 @@ UX: Outgoing calls that get hung up or cancelled by the local user are incorrect
 UX: Remove Call History header and dividers from the call log tab.:CHECKPOINT:154
 UX: Reduce the number of lines in each call log entry display, for example put the call status on the same line as the other info. Also use a blue colour instead of red for incoming calls.:CHECKPOINT:155
 UX: Add functionality to the call log to add a clickable phone icon next to the call log entry that will populate the phone tab destination and make a call to the number that was in the call log entry.:CHECKPOINT:156
-
+INFRA: Update the augment-README file to reflect the current state of the project. This file is not for end user documentation but for developers and contributors to understand the project, its features, directory structure, prerequisites, installation, configuration details, usage, key files and key functions. It should provide useful information to any other AI/LLM to be able to start developing it by just reading the README file.:CHECKPOINT:157
 
 #STATUS:PENDING:
-INFRA: Update the augment-README file to reflect the current state of the project. This file is not for end user documentation but for developers and contributors to understand the project, its features, directory structure, prerequisites, installation, configuration details, usage, key files and key functions. It should provide useful information to any other AI/LLM to be able to start developing it by just reading the README file.:CHECKPOINT:157
 
 
 #STATUS:NEW:
@@ -89,8 +88,6 @@ UX: Make browser notifications a setting that can be enabled and disabled. It sh
 UX: Call transfers need to be implemented. There should be functions for this in SIP.js documentation but a transfer button needs to be created and displayed once a call is up.
 
 INFRA: DTMF functions need to be added. There should be a DTMF button that can be clicked to send DTMF tones. Ask any questions that could elaborate and clarify implementation of this feature.
-
-INFRA: Hold functionality is needed. There should be functions for this in SIP.js documentation but a hold button needs to be created and displayed once a call is up.
 
 INFRA: Click to call recognition of telephone numbers in the browser web pages needs to be implemented whereby a phone number recognized in any web page is made clickable and when clicked, it will populate the phone tab destination and make a call to the number.
 
@@ -104,8 +101,6 @@ INFRA: Investigate any potential performance improvements.
 INFRA: Investigate for any potential security improvements.
 INFRA: Add automated tests for the extension functionality.
 INFRA: Package the extension for distribution
-
-INFRA: Update the augment-README file to reflect the current state of the project. This file is not for end user documentation but for developers and contributors to understand the project, its features, directory structure, prerequisites, installation, configuration details, usage, key files and key functions. It should provide useful information to any other AI/LLM to be able to start developing it by just reading the README file.
 
 INFRA: Manifest version 2 is deprecated, and support will be removed in 2024. See https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline for details.:CHECKPOINT:47,48,49,50,51,53,54
 INFRA: Unchecked runtime.lastError: Unable to download all specified images. background.html:0 (anonymous function):CHECKPOINT:47
@@ -121,6 +116,7 @@ BUG: Error: Microphone access denied. Microphone and speaker access is required 
 #STATUS: PARKED:
 UX: Add settings input boxes for the STUN servers that are present in the peerConnectionConfiguration. Autofill with stun:stun.l.google.com:19302.
 
+INFRA: Hold functionality is needed. There should be functions for this in SIP.js documentation but a hold button needs to be created and displayed once a call is up.
 
 #STATUS: BROKEN:
 UX: Outbound calls that get rejected/hung up during ringing/trying are being incorrectly labeled as no answer.:CHECKPOINT:146
