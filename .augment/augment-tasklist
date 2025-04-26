@@ -78,11 +78,10 @@ UX: Add functionality to the call log to add a clickable phone icon next to the 
 
 
 #STATUS:PENDING:
+INFRA: Update the augment-README file to reflect the current state of the project. This file is not for end user documentation but for developers and contributors to understand the project, its features, directory structure, prerequisites, installation, configuration details, usage, key files and key functions. It should provide useful information to any other AI/LLM to be able to start developing it by just reading the README file.:CHECKPOINT:157
 
 
 #STATUS:NEW:
-INFRA: Hold functionality is needed. There should be functions for this in SIP.js documentation but a hold button needs to be created and displayed once a call is up.
-
 INFRA: Mute functionality is needed. There should be functions for this in SIP.js documentation but a mute button needs to be created and displayed once a call is up. This should mute the microphone and speaker.
 
 UX: Make browser notifications a setting that can be enabled and disabled. It should be at the bottom of the settings tab under the disconnect button.
@@ -90,6 +89,8 @@ UX: Make browser notifications a setting that can be enabled and disabled. It sh
 UX: Call transfers need to be implemented. There should be functions for this in SIP.js documentation but a transfer button needs to be created and displayed once a call is up.
 
 INFRA: DTMF functions need to be added. There should be a DTMF button that can be clicked to send DTMF tones. Ask any questions that could elaborate and clarify implementation of this feature.
+
+INFRA: Hold functionality is needed. There should be functions for this in SIP.js documentation but a hold button needs to be created and displayed once a call is up.
 
 INFRA: Click to call recognition of telephone numbers in the browser web pages needs to be implemented whereby a phone number recognized in any web page is made clickable and when clicked, it will populate the phone tab destination and make a call to the number.
 
