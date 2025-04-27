@@ -1,0 +1,233 @@
+# Phone - Chrome Extension SIP Client
+
+Author [https://github.com/Vince-0](https://github.com/Vince-0/Projects)
+
+This project is a Chrome extension that provides a WebRTC-based SIP client for making and receiving voice calls directly from the browser. 
+
+It uses the SIP.js library to handle SIP protocol communication and WebRTC for media handling.
+
+Based on [WebRTC Client](https://github.com/Vince-0/WebRTC_client)
+
+The extension is designed with a minimalist UI and focuses on providing essential calling functionality in a compact, user-friendly interface.
+
+## Features
+- SIP registration and authentication
+- Making outbound calls
+- Receiving inbound calls with browser notifications
+- Call controls (answer, hang up)
+- Tabbed interface (Phone, Settings, Call Log)
+- Call log with history of all calls (incoming/outgoing)
+- Click-to-call from call log entries
+- Audio feedback (ringing, dialing, hangup tones)
+- Connection status display with visual indicators
+- Chrome extension integration with storage and permissions APIs
+- Automatic microphone permission handling
+- Persistent settings across browser sessions
+- Standalone window operation (not attached to extension button)
+- Enhanced error handling and detailed logging
+- Event-driven UI updates (no polling)
+
+<p align="center">
+  <img src="https://github.com/Vince-0/webrtc-chrome/blob/c1424517fd174ab9a1dc39cc54ed751be9408d03/screenshots/phone_call.png" />
+</p>
+<p align="center" width="100%">
+ <img src="https://github.com/Vince-0/webrtc-chrome/blob/c1424517fd174ab9a1dc39cc54ed751be9408d03/screenshots/phone_settings.png" />
+ <img src="https://github.com/Vince-0/webrtc-chrome/blob/751e28f0985bdae21d29a68ecedd871eaf2cc54e/screenshots/phone_calllog.png" />
+</p>
+
+## Why
+
+Do telephone things from your browser
+
+## Project Overview
+
+## Directory Structure
+- `/` - Root directory containing the main application files
+  - `manifest.json` - Chrome extension manifest file
+  - `popup.html` - The main extension popup interface
+  - `background.html` - Background page for the extension
+  - `/js` - JavaScript files
+    - `popup.js` - UI logic for the popup interface
+    - `background.js` - Background script for handling SIP communication
+    - `sip-0.21.2.min.js` - SIP.js library for WebRTC SIP functionality
+    - `sip-client.js` - Client wrapper for SIP.js functionality
+    - `call-log.js` - Call log management functionality
+    - `notifications.js` - Browser notification handling
+  - `/css` - Stylesheets
+    - `style.css` - Styling for the extension UI
+  - `/icons` - Directory containing extension icons
+    - `icon16.png` - 16x16 icon for the extension
+    - `icon48.png` - 48x48 icon for the extension
+    - `icon128.png` - 128x128 icon for the extension
+  - `/audio` - Audio files and related JavaScript
+    - `ring1.ogg` - Ringtone for incoming calls
+    - `dial1.ogg` - Dialing tone for outgoing calls
+    - `hangup1.ogg` - Hangup sound
+    - `ringtone.js` - Ringtone playback handling
+    - `dialtone.js` - Dialing tone playback handling
+    - `hangupsound.js` - Hangup sound playback handling
+  - `/.augment` - Project documentation and management
+    - `augment-guidelines` - Workflow guidelines for the project
+    - `augment-tasklist` - Task tracking for the project
+    - `augment-chathistory1` - History of development conversations
+    - `augment-README` - Comprehensive project documentation
+
+## Prerequisites
+- Google Chrome browser
+- A SIP account with a SIP server that supports WebSocket connections
+- Microphone access permissions
+
+## Installation
+1. Clone or download this repository
+2. Open Chrome and navigate to `chrome://extensions/`
+3. Enable "Developer mode" (toggle in the top-right corner)
+4. Click "Load unpacked" and select the directory containing this extension
+
+## Configuration
+The extension requires the following configuration in the Settings tab:
+- SIP Server: The domain of your SIP server
+- WebSocket URL: The WebSocket endpoint of your SIP server (auto-filled as wss://server:7443/ws)
+- Username: Your SIP account username
+- Password: Your SIP account password
+- Display Name: Your name to display to others (auto-filled from username)
+
+## Usage
+1. Click on the extension icon in Chrome to open the standalone window
+2. The interface has three tabs: Phone, Settings, and Call Log
+3. In the Settings tab, enter your SIP server details and credentials
+4. Click "Connect" to register with the SIP server
+5. Switch to the Phone tab to make and receive calls
+6. Make calls by entering a destination and clicking "Call"
+7. For incoming calls, use the "Answer" button
+8. End active calls with the "Hang Up" button
+9. The registration status is indicated by a colored dot (green for registered, red for unregistered)
+10. View your call history in the Call Log tab
+11. Click the phone icon next to any call log entry to call that number
+
+## Key Files and Their Roles
+
+### UI and Interface
+
+- `popup.html`: Main UI structure with tabbed interface for Phone, Settings, and Call Log
+- `popup.js`: UI logic, event handling, tab switching, and call log rendering
+- `style.css`: All styling for the extension UI with minimalist design principles
+
+### SIP Communication
+
+- `background.js`: Core SIP functionality including connection management, call handling, and state management
+- `sip-client.js`: Wrapper for SIP.js functionality, handling SIP sessions and events
+- `sip-0.21.2.min.js`: SIP.js library providing WebRTC SIP protocol implementation
+
+### Call Logging
+
+- `call-log.js`: Manages call history storage, retrieval, and formatting
+
+### Notifications and Audio
+
+- `notifications.js`: Handles browser notifications for incoming calls
+- `ringtone.js`: Controls ringtone playback for incoming calls
+- `dialtone.js`: Controls dialing tone playback for outgoing calls
+- `hangupsound.js`: Controls hangup sound playback when calls end
+
+### Configuration
+
+- `manifest.json`: Extension configuration, permissions, and metadata
+
+## Key Functions
+
+### Background Script (background.js)
+
+- `connect()`: Establishes connection to the SIP server
+- `makeCall()`: Initiates an outbound call to a specified destination
+- `answer()`: Answers an incoming call
+- `hangup()`: Ends the current call
+- `disconnect()`: Unregisters from the SIP server and closes the connection
+- `handleInviteRequest()`: Processes incoming call invitations
+- `handleByePacket()`: Handles call termination events
+- `updateConnectionState()`: Updates and broadcasts the connection state
+- `logWithDetails()`: Enhanced logging with structured details
+
+### Popup Script (popup.js)
+
+- `init()`: Initializes the UI and sets up event listeners
+- `updateUIFromState()`: Updates the UI based on the current connection state
+- `switchToTab()`: Handles tab switching between Phone, Settings, and Call Log
+- `makeCall()`: Initiates a call from the UI
+- `answer()`: Answers an incoming call from the UI
+- `hangup()`: Ends the current call from the UI
+- `loadCallLog()`: Loads and displays call history
+- `callFromLog()`: Initiates a call from a call log entry
+- `updateDefaultWebSocketUrl()`: Auto-fills WebSocket URL based on SIP Server
+- `updateDefaultDisplayName()`: Auto-fills Display Name based on Username
+
+### Call Log (call-log.js)
+
+- `startCall()`: Records the start of a new call
+- `endCall()`: Records the end of a call with status
+- `getCallLog()`: Retrieves the call history
+- `formatTimestamp()`: Formats call timestamps for display
+- `formatDuration()`: Formats call duration for display
+
+### SIP Client (sip-client.js)
+
+- `createUserAgent()`: Creates a SIP user agent
+- `register()`: Registers with the SIP server
+- `setupSessionHandlers()`: Sets up event handlers for SIP sessions
+- `handleIncomingCall()`: Processes incoming call requests
+- `handleOutgoingCall()`: Manages outgoing call state
+
+## Implemented Features and Improvements
+
+### UI and Design
+
+- Minimalist UI with smaller headings and reduced visual clutter
+- Tabbed interface with Phone, Settings, and Call Log tabs
+- Compact window size (reduced by over 60% from original)
+- Reduced margins and spacing throughout the interface
+- Centered text alignment for visual harmony
+- Status indicators with color coding (green/red)
+- Call log with clear visual distinction between call types
+- Clickable phone icons for easy callback functionality
+
+### Functionality
+
+- Persistent registration across extension minimization
+- Automatic WebSocket URL generation from SIP server domain
+- Automatic display name generation from username
+- Browser notifications for incoming calls
+- Audio feedback for call states (ringing, dialing, hangup)
+- Comprehensive call logging with status tracking
+- Click-to-call from call log entries
+- Proper call status handling for various scenarios
+- Event-driven UI updates for responsive experience
+
+### Technical Improvements
+
+- Enhanced error handling and detailed logging
+- Improved handling of SIP messages and responses
+- Proper call state management for inbound and outbound calls
+- Correct handling of various call termination scenarios
+- Efficient storage of call history with local storage
+- Proper cleanup of audio resources when calls end
+
+## Pending Features
+
+- Call transfer functionality
+- Mute functionality
+- Hold functionality
+- DTMF tone sending
+- Click-to-call from web pages
+- Browser notification settings
+- Migration to Manifest V3
+- Security improvements for stored credentials
+- Automated testing
+
+## Known Issues
+
+- Microphone access may be denied, requiring proper permissions setup
+- Some SIP servers may require specific configuration for WebRTC compatibility
+- Outbound calls may not properly terminate in certain scenarios
+
+## License
+
+This project is licensed under the [MIT License](https://mit-license.org/). 
