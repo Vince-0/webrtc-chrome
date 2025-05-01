@@ -2,7 +2,11 @@
 
 Author [https://github.com/Vince-0](https://github.com/Vince-0/Projects)
 
+Use at your own risk.
+
 This project is a Chrome extension that provides a WebRTC-based SIP client for making and receiving voice calls directly from the browser. 
+
+Created using (Augment Code)[https://www.augmentcode.com/] , notes: (AI Coding)(https://github.com/Vince-0/AI_Coding)
 
 It uses the SIP.js library to handle SIP protocol communication and WebRTC for media handling.
 
