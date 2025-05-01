@@ -6,13 +6,15 @@ Use at your own risk.
 
 This project is a Chrome extension that provides a WebRTC-based SIP client for making and receiving voice calls directly from the browser. 
 
-Implements the SIP.js library to handle SIP protocol communication and WebRTC for media handling.
+Designed with a minimalist UI and focuses on providing essential calling functionality in a compact, user-friendly interface.
 
 Created using Augment Code, notes: [AI Assisted Software Development](https://github.com/Vince-0/AI_Coding)
 
+Implements the SIP.js library to handle SIP protocol communication and WebRTC for media handling.
+
 Based on [WebRTC Client](https://github.com/Vince-0/WebRTC_client)
 
-The extension is designed with a minimalist UI and focuses on providing essential calling functionality in a compact, user-friendly interface.
+Connects to a WebSocket server like this FreeSWITCH configuration: https://github.com/Vince-0/FreeSWITCH_WEBRTC
 
 ## Features
 - SIP registration and authentication
