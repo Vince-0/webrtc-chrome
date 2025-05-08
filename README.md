@@ -236,4 +236,4 @@ The extension requires the following configuration in the Settings tab:
 
 ## License
 
-This project is licensed under the [MIT License](https://mit-license.org/). 
+This project is licensed under the [MIT License](https://mit-license.org/) - see the [LICENSE](https://github.com/Vince-0/webrtc-chrome/blob/d0178bb2af16490d22b17d321b97991064bc779d/LICENCE) file for details.
